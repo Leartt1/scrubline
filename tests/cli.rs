@@ -4,7 +4,12 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn run(input: &str) -> String {
+    run_with(&[], input)
+}
+
+fn run_with(args: &[&str], input: &str) -> String {
     let mut child = Command::new(env!("CARGO_BIN_EXE_scrubline"))
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -53,4 +58,9 @@ fn redacts_named_pattern_secret_in_free_text() {
         run(&format!("error: leaked {token} in handler\n")),
         "error: leaked [REDACTED:github-token] in handler\n"
     );
+}
+
+#[test]
+fn mask_char_replaces_label_with_fixed_mask() {
+    assert_eq!(run_with(&["--mask-char", "#"], "token=abc\n"), "token=########\n");
 }

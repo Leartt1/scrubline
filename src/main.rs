@@ -6,12 +6,34 @@
 use std::io::{self, BufRead, BufWriter, Write};
 use std::process::ExitCode;
 
+use clap::Parser;
+
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
+use scrubline::mask::Mask;
 use scrubline::patterns::PatternDetector;
 
+/// Number of mask characters used for `--mask-char`, chosen to hide the original
+/// secret's length rather than reveal it.
+const MASK_WIDTH: usize = 8;
+
+/// Secrets and PII never leave the pipe — a streaming redaction filter.
+#[derive(Parser)]
+#[command(name = "scrubline", version, about, long_about = None)]
+struct Cli {
+    /// Replace each secret with this character (repeated) instead of a
+    /// `[REDACTED:<kind>]` label.
+    #[arg(long, value_name = "CHAR")]
+    mask_char: Option<char>,
+}
+
 fn main() -> ExitCode {
-    let engine = Engine::new(default_detectors());
+    let cli = Cli::parse();
+    let mask = match cli.mask_char {
+        Some(c) => Mask::Fixed(c.to_string().repeat(MASK_WIDTH)),
+        None => Mask::Labeled,
+    };
+    let engine = Engine::with_mask(default_detectors(), mask);
     match run(&engine) {
         Ok(()) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.

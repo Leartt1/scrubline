@@ -5,6 +5,7 @@
 //! the whole stream.
 
 pub mod detector;
+pub mod engine;
 pub mod json;
 pub mod keys;
 pub mod logfmt;

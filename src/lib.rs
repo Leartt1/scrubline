@@ -6,4 +6,5 @@
 
 pub mod detector;
 pub mod keys;
+pub mod logfmt;
 pub mod span;

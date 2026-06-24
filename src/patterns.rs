@@ -74,40 +74,45 @@ mod tests {
         redact_spans(text, &d.find(text))
     }
 
+    // Test fixtures split each token prefix from its body via concat!(), so no
+    // contiguous secret-shaped literal exists in the source for GitHub's secret
+    // scanner to flag. The compiler rejoins them, so the detectors see the real
+    // shape.
+
     #[test]
     fn masks_aws_access_key() {
-        assert_eq!(redact("key AKIAIOSFODNN7EXAMPLE end"), "key [REDACTED:aws-access-key] end");
+        let key = concat!("AKIA", "IOSFODNN7EXAMPLE");
+        assert_eq!(redact(&format!("key {key} end")), "key [REDACTED:aws-access-key] end");
     }
 
     #[test]
     fn masks_github_token() {
-        assert_eq!(
-            redact("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
-            "[REDACTED:github-token]"
-        );
+        let token = concat!("ghp_", "abcdefghijklmnopqrstuvwxyz0123456789");
+        assert_eq!(redact(token), "[REDACTED:github-token]");
     }
 
     #[test]
     fn masks_gitlab_pat() {
-        assert_eq!(redact("glpat-abcdefghij0123456789"), "[REDACTED:gitlab-pat]");
+        let pat = concat!("glpat", "-abcdefghij0123456789");
+        assert_eq!(redact(pat), "[REDACTED:gitlab-pat]");
     }
 
     #[test]
     fn masks_slack_token() {
-        assert_eq!(redact("xoxb-0123456789abcd"), "[REDACTED:slack-token]");
+        let token = concat!("xoxb", "-0123456789abcd");
+        assert_eq!(redact(token), "[REDACTED:slack-token]");
     }
 
     #[test]
     fn masks_stripe_key() {
-        assert_eq!(redact("sk_live_0123456789abc"), "[REDACTED:stripe-key]");
+        let key = concat!("sk_", "live_0123456789abc");
+        assert_eq!(redact(key), "[REDACTED:stripe-key]");
     }
 
     #[test]
     fn masks_google_api_key() {
-        assert_eq!(
-            redact("AIzaabcdefghijklmnopqrstuvwxyz012345678"),
-            "[REDACTED:google-api-key]"
-        );
+        let key = concat!("AIza", "abcdefghijklmnopqrstuvwxyz012345678");
+        assert_eq!(redact(key), "[REDACTED:google-api-key]");
     }
 
     #[test]

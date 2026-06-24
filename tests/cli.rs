@@ -53,7 +53,8 @@ fn passes_through_a_stream_unchanged_when_clean() {
 
 #[test]
 fn redacts_named_pattern_secret_in_free_text() {
-    let token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+    // Split so no contiguous token literal exists in source (secret scanners).
+    let token = concat!("ghp_", "abcdefghijklmnopqrstuvwxyz0123456789");
     assert_eq!(
         run(&format!("error: leaked {token} in handler\n")),
         "error: leaked [REDACTED:github-token] in handler\n"

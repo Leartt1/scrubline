@@ -5,4 +5,5 @@
 //! the whole stream.
 
 pub mod detector;
+pub mod keys;
 pub mod span;

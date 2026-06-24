@@ -8,6 +8,7 @@ use std::process::ExitCode;
 
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
+use scrubline::patterns::PatternDetector;
 
 fn main() -> ExitCode {
     let engine = Engine::new(default_detectors());
@@ -22,11 +23,11 @@ fn main() -> ExitCode {
     }
 }
 
-/// The value detectors run on every line. Empty for now — named-pattern and
-/// entropy detectors arrive on day 2/3; the structured (JSON/logfmt) layer is
-/// already active without them.
+/// The value detectors run on every line. Named-pattern detection is active; the
+/// entropy detector arrives on day 3. The structured (JSON/logfmt) layer runs
+/// regardless of this list.
 fn default_detectors() -> Vec<Box<dyn Detector>> {
-    Vec::new()
+    vec![Box::new(PatternDetector::default())]
 }
 
 fn run(engine: &Engine) -> io::Result<()> {

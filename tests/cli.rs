@@ -45,3 +45,12 @@ fn passes_through_a_stream_unchanged_when_clean() {
     let input = "starting up\nlistening on :8080\nrequest ok\n";
     assert_eq!(run(input), input);
 }
+
+#[test]
+fn redacts_named_pattern_secret_in_free_text() {
+    let token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+    assert_eq!(
+        run(&format!("error: leaked {token} in handler\n")),
+        "error: leaked [REDACTED:github-token] in handler\n"
+    );
+}

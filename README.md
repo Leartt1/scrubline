@@ -49,10 +49,11 @@ Redaction runs in two layers:
    For a sensitive key, the **entire value subtree** is masked, so nested
    secrets can't leak.
 
-2. **Value detectors (on the roadmap).** Named-pattern detectors (Stripe, AWS,
-   GitHub, JWT, private keys, database URLs, …) and a tuned Shannon-entropy
-   detector for unknown high-entropy tokens, for secrets that show up in
-   free-text log messages rather than structured fields.
+2. **Value detectors (named patterns available now).** Named-pattern detectors
+   — AWS keys, GitHub/GitLab/Slack tokens, Stripe keys, Google API keys, JWTs,
+   PEM private keys, credentialed URIs, and emails — catch secrets in free-text
+   log messages, not just structured fields. A tuned Shannon-entropy detector
+   for unknown high-entropy tokens is next.
 
 ```console
 # JSON: the whole sensitive subtree goes, field order is preserved
@@ -66,6 +67,14 @@ level=warn password="[REDACTED:password]" api_key=[REDACTED:api_key] path=/x
 # clean lines pass through untouched
 $ echo 'listening on :8080' | scrubline
 listening on :8080
+
+# free-text secrets in a log message are caught too
+$ echo 'pushed with ghp_abcdefghijklmnopqrstuvwxyz0123456789' | scrubline
+pushed with [REDACTED:github-token]
+
+# hide the kind and length entirely with --mask-char
+$ echo 'token=s3cr3t' | scrubline --mask-char '*'
+token=********
 ```
 
 ## Install
@@ -104,9 +113,10 @@ Line terminators (LF / CRLF) are preserved, and a closed downstream pipe
 
 - [x] Streaming line filter, never buffers the stream
 - [x] Structured key-aware redaction for JSON and logfmt
-- [ ] Named-pattern detectors (Stripe, AWS, GitHub, GitLab, Slack, JWT, PEM keys, DB URLs, emails)
+- [x] Named-pattern detectors (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, PEM keys, credentialed URIs, emails)
+- [x] `--mask-char` and a real `--help`/`--version` CLI
 - [ ] Tuned entropy detector with a published precision/recall benchmark
-- [ ] `--mask-char`, `--json` summary, custom-pattern config file
+- [ ] `--json` summary and a custom-pattern config file
 - [ ] Claude Code `PreToolUse` hook mode — strip secrets before they hit an agent's context
 
 ## License

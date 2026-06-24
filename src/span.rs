@@ -1,5 +1,7 @@
 //! Byte-span based redaction: turn detected sensitive regions into masked text.
 
+use crate::mask::Mask;
+
 /// A region of the input flagged as sensitive, identified by byte offsets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Span {
@@ -18,11 +20,16 @@ impl Span {
 }
 
 /// Replace every span in `text` with `[REDACTED:<kind>]`, leaving the rest intact.
+pub fn redact_spans(text: &str, spans: &[Span]) -> String {
+    redact_spans_with(text, spans, &Mask::Labeled)
+}
+
+/// Replace every span in `text` using `mask`, leaving the rest intact.
 ///
 /// Spans may arrive in any order; overlapping spans are collapsed (the earliest
 /// start wins, later overlapping spans are dropped) so the output is never
 /// double-masked or corrupted.
-pub fn redact_spans(text: &str, spans: &[Span]) -> String {
+pub fn redact_spans_with(text: &str, spans: &[Span], mask: &Mask) -> String {
     if spans.is_empty() {
         return text.to_string();
     }
@@ -37,9 +44,7 @@ pub fn redact_spans(text: &str, spans: &[Span]) -> String {
             continue;
         }
         out.push_str(&text[cursor..span.start]);
-        out.push_str("[REDACTED:");
-        out.push_str(&span.kind);
-        out.push(']');
+        out.push_str(&mask.render(&span.kind));
         cursor = span.end;
     }
     out.push_str(&text[cursor..]);
@@ -97,6 +102,16 @@ mod tests {
             Span::new(3, 8, "inner"),
         ];
         assert_eq!(redact_spans(text, &spans), "[REDACTED:wide] tail");
+    }
+
+    #[test]
+    fn applies_a_fixed_mask_when_requested() {
+        let text = "token=ghp_ABC123 ok";
+        let spans = vec![Span::new(6, 16, "github-token")];
+        assert_eq!(
+            redact_spans_with(text, &spans, &Mask::Fixed("####".into())),
+            "token=#### ok"
+        );
     }
 
     #[test]

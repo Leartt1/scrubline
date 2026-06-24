@@ -9,5 +9,6 @@ pub mod engine;
 pub mod json;
 pub mod keys;
 pub mod logfmt;
+pub mod mask;
 pub mod patterns;
 pub mod span;

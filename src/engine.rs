@@ -7,31 +7,40 @@
 //!     detector's spans, and mask them in one pass (overlaps collapse).
 
 use crate::detector::Detector;
-use crate::json::redact_json;
+use crate::json::redact_json_with;
 use crate::logfmt;
-use crate::span::{Span, redact_spans};
+use crate::mask::Mask;
+use crate::span::{Span, redact_spans_with};
 
-/// Holds the configured detectors and applies the full redaction pipeline.
+/// Holds the configured detectors and mask style, and applies the full
+/// redaction pipeline.
 pub struct Engine {
     detectors: Vec<Box<dyn Detector>>,
+    mask: Mask,
 }
 
 impl Engine {
+    /// Build an engine that masks with `[REDACTED:<kind>]` labels.
     pub fn new(detectors: Vec<Box<dyn Detector>>) -> Self {
-        Engine { detectors }
+        Engine::with_mask(detectors, Mask::Labeled)
+    }
+
+    /// Build an engine with a specific mask style.
+    pub fn with_mask(detectors: Vec<Box<dyn Detector>>, mask: Mask) -> Self {
+        Engine { detectors, mask }
     }
 
     /// Redact a single line, returning the cleaned text (no trailing newline
     /// handling — the caller owns line framing).
     pub fn redact_line(&self, line: &str) -> String {
-        if let Some(structured) = redact_json(line) {
+        if let Some(structured) = redact_json_with(line, &self.mask) {
             let spans = self.detector_spans(&structured);
-            return redact_spans(&structured, &spans);
+            return redact_spans_with(&structured, &spans, &self.mask);
         }
 
         let mut spans = logfmt::sensitive_spans(line);
         spans.extend(self.detector_spans(line));
-        redact_spans(line, &spans)
+        redact_spans_with(line, &spans, &self.mask)
     }
 
     fn detector_spans(&self, text: &str) -> Vec<Span> {
@@ -88,5 +97,12 @@ mod tests {
     fn leaves_clean_lines_unchanged() {
         let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
+    }
+
+    #[test]
+    fn applies_mask_style_across_json_and_logfmt() {
+        let e = Engine::with_mask(vec![], Mask::Fixed("##".into()));
+        assert_eq!(e.redact_line("{\"token\":\"x\"}"), "{\"token\":\"##\"}");
+        assert_eq!(e.redact_line("password=secret"), "password=##");
     }
 }

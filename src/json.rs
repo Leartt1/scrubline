@@ -6,38 +6,45 @@
 //! order so the line stays recognizable.
 
 use crate::keys::is_sensitive_key;
+use crate::mask::Mask;
 use serde_json::Value;
 
-/// If `line` is a JSON object or array, return it with every sensitive value
-/// masked. Returns `None` for anything that isn't a JSON object/array so plain
-/// text and logfmt fall through to other layers untouched.
+/// If `line` is a JSON object or array, return it with sensitive values masked
+/// with a `[REDACTED:<key>]` label. `None` for non-JSON lines.
 pub fn redact_json(line: &str) -> Option<String> {
+    redact_json_with(line, &Mask::Labeled)
+}
+
+/// If `line` is a JSON object or array, return it with every sensitive value
+/// masked using `mask`. Returns `None` for anything that isn't a JSON
+/// object/array so plain text and logfmt fall through to other layers untouched.
+pub fn redact_json_with(line: &str, mask: &Mask) -> Option<String> {
     let trimmed = line.trim();
     // Only objects/arrays — never mask a bare scalar line like `42` or `true`.
     if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
         return None;
     }
     let mut value: Value = serde_json::from_str(trimmed).ok()?;
-    redact_value(&mut value);
+    redact_value(&mut value, mask);
     serde_json::to_string(&value).ok()
 }
 
 /// Walk `value`; when a key is sensitive, replace its entire value subtree with
 /// a marker so nested secrets can't leak.
-fn redact_value(value: &mut Value) {
+fn redact_value(value: &mut Value, mask: &Mask) {
     match value {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
                 if is_sensitive_key(key) {
-                    *child = Value::String(format!("[REDACTED:{}]", key.to_ascii_lowercase()));
+                    *child = Value::String(mask.render(&key.to_ascii_lowercase()));
                 } else {
-                    redact_value(child);
+                    redact_value(child, mask);
                 }
             }
         }
         Value::Array(items) => {
             for item in items.iter_mut() {
-                redact_value(item);
+                redact_value(item, mask);
             }
         }
         _ => {}

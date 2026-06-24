@@ -1,0 +1,25 @@
+[package]
+name = "scrubline"
+version = "0.1.0"
+edition = "2024"
+description = "Secrets and PII never leave the pipe. A streaming, structured-log-aware redaction filter."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Leartt1/scrubline"
+readme = "README.md"
+keywords = ["secrets", "redaction", "logs", "security", "pii"]
+categories = ["command-line-utilities", "text-processing"]
+
+[lib]
+name = "scrubline"
+path = "src/lib.rs"
+
+[[bin]]
+name = "scrubline"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+lto = true
+strip = true

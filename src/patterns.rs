@@ -56,7 +56,7 @@ pub fn default_patterns() -> Vec<(&'static str, Regex)> {
         ("google-api-key", r"AIza[A-Za-z0-9_-]{35}"),
         ("jwt", r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"),
         ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
-        ("credential-uri", r"[a-zA-Z][a-zA-Z0-9+.-]*://[^:@\s/]+:[^@\s/]+@\S+"),
+        ("credential-uri", r"[a-zA-Z][a-zA-Z0-9+.-]*://[^:@\s/]*:[^@\s/]+@\S+"),
         ("email", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     ];
     raw.iter()

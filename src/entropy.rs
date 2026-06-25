@@ -75,9 +75,11 @@ impl EntropyDetector {
 }
 
 /// Bytes that make up a candidate token: alphanumerics plus the punctuation used
-/// by base64/url-safe encodings and common token formats.
+/// inside base64/url-safe encodings and common token formats. `=` is excluded so
+/// it acts as a boundary (it only appears as trailing base64 padding), which
+/// keeps `key=SECRET` from masking the `key=` prefix along with the value.
 fn is_token_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=' | b'_' | b'-')
+    b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'_' | b'-')
 }
 
 /// True if `s` is a canonical 8-4-4-4-12 hex UUID.

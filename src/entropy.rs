@@ -17,6 +17,11 @@ const MIN_LEN: usize = 20;
 /// Minimum Shannon entropy (bits/char) to flag. Random base64 sits near 5–6;
 /// 3.5 is a deliberately conservative floor combined with the other guards.
 const MIN_ENTROPY: f64 = 3.5;
+/// Minimum distinct character classes among {lower, upper, digit}. Random
+/// secret tokens almost always mix all three; the false-positive traps (k8s pod
+/// names, dashed hashes, paths) are typically just lowercase + digits, so
+/// requiring three is what separates secrets from infra noise.
+const MIN_CLASSES: usize = 3;
 
 /// Flags long, high-entropy, mixed-charset tokens that no named pattern matched.
 pub struct EntropyDetector {
@@ -64,7 +69,7 @@ impl EntropyDetector {
         token.len() >= self.min_len
             && !is_uuid(token)
             && !is_hex(token)
-            && class_count(token) >= 2
+            && class_count(token) >= MIN_CLASSES
             && shannon_entropy(token) >= self.min_entropy
     }
 }
@@ -224,6 +229,19 @@ mod tests {
     #[test]
     fn skips_ordinary_sentence() {
         let line = "the deployment finished successfully without any errors today";
+        assert_eq!(redact(line), line);
+    }
+
+    #[test]
+    fn skips_two_class_pod_name() {
+        // lowercase + digits only: a real k8s pod name must not be redacted.
+        let line = "pod nginx-7d8b49557c-x2vfq Running on node-3";
+        assert_eq!(redact(line), line);
+    }
+
+    #[test]
+    fn skips_dashed_hex_traceparent() {
+        let line = "trace 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
         assert_eq!(redact(line), line);
     }
 }

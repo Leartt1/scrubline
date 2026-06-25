@@ -49,11 +49,13 @@ Redaction runs in two layers:
    For a sensitive key, the **entire value subtree** is masked, so nested
    secrets can't leak.
 
-2. **Value detectors (named patterns available now).** Named-pattern detectors
-   — AWS keys, GitHub/GitLab/Slack tokens, Stripe keys, Google API keys, JWTs,
-   PEM private keys, credentialed URIs, and emails — catch secrets in free-text
-   log messages, not just structured fields. A tuned Shannon-entropy detector
-   for unknown high-entropy tokens is next.
+2. **Value detectors (available now).** Named-pattern detectors — AWS keys,
+   GitHub/GitLab/Slack tokens, Stripe keys, Google API keys, JWTs, PEM private
+   keys, credentialed URIs, and emails — catch secrets in free-text log
+   messages, not just structured fields. A conservative Shannon-entropy detector
+   then catches *unknown* high-entropy tokens, while deliberately leaving git
+   SHAs, UUIDs, content hashes, and Kubernetes pod names alone. Turn it off with
+   `--no-entropy`.
 
 ```console
 # JSON: the whole sensitive subtree goes, field order is preserved
@@ -72,10 +74,41 @@ listening on :8080
 $ echo 'pushed with ghp_abcdefghijklmnopqrstuvwxyz0123456789' | scrubline
 pushed with [REDACTED:github-token]
 
+# an unknown high-entropy token is caught by the entropy detector...
+$ echo 'signed url sig=Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW' | scrubline
+signed url sig=[REDACTED:high-entropy]
+
+# ...but a commit SHA and a pod name in the same line are left alone
+$ echo 'pod nginx-7d8b49557c-x2vfq at 9fceb02d0ae598e95dc970b74767f19372d61af8' | scrubline
+pod nginx-7d8b49557c-x2vfq at 9fceb02d0ae598e95dc970b74767f19372d61af8
+
 # hide the kind and length entirely with --mask-char
 $ echo 'token=s3cr3t' | scrubline --mask-char '*'
 token=********
 ```
+
+## Accuracy
+
+The entropy detector is the part most likely to cause false positives, so it's
+held to a measured standard. A precision/recall **benchmark runs as a test**
+over a labeled corpus of realistic log lines — 21 secrets across every detector
+path, plus 28 clean lines full of the usual traps (git SHAs, UUIDs, md5/sha
+hashes, Kubernetes pod names, file paths, semver, W3C traceparents):
+
+| metric | score |
+|--------|------:|
+| precision | **1.000** |
+| recall | **1.000** |
+
+```console
+cargo test --test precision_recall -- --nocapture
+```
+
+Because it's a test with asserted floors (precision ≥ 0.97, recall ≥ 0.95), a
+change that starts masking commit SHAs — or stops masking real secrets — fails
+CI instead of shipping. The entropy detector only flags long tokens that mix
+upper/lower/digits and clear an entropy floor, which is what keeps SHAs and pod
+names safe.
 
 ## Install
 
@@ -109,13 +142,20 @@ docker logs -f web | scrubline | tee cleaned.log
 Line terminators (LF / CRLF) are preserved, and a closed downstream pipe
 (`… | head`) exits cleanly.
 
+Flags:
+
+- `--mask-char <CHAR>` — replace secrets with a fixed run of one character
+  instead of a `[REDACTED:<kind>]` label.
+- `--no-entropy` — disable the heuristic entropy detector (named-pattern and
+  structured redaction still run).
+
 ## Roadmap
 
 - [x] Streaming line filter, never buffers the stream
 - [x] Structured key-aware redaction for JSON and logfmt
 - [x] Named-pattern detectors (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, PEM keys, credentialed URIs, emails)
 - [x] `--mask-char` and a real `--help`/`--version` CLI
-- [ ] Tuned entropy detector with a published precision/recall benchmark
+- [x] Conservative entropy detector with a precision/recall benchmark (and `--no-entropy`)
 - [ ] `--json` summary and a custom-pattern config file
 - [ ] Claude Code `PreToolUse` hook mode — strip secrets before they hit an agent's context
 

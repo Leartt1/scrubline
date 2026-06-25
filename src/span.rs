@@ -26,9 +26,10 @@ pub fn redact_spans(text: &str, spans: &[Span]) -> String {
 
 /// Replace every span in `text` using `mask`, leaving the rest intact.
 ///
-/// Spans may arrive in any order; overlapping spans are collapsed (the earliest
-/// start wins, later overlapping spans are dropped) so the output is never
-/// double-masked or corrupted.
+/// Spans may arrive in any order. Overlapping (or touching) spans are merged
+/// into their **union** and masked once, labeled with the earliest-starting
+/// span's kind. Merging — rather than dropping later spans — guarantees that no
+/// part of a secret can leak when two detectors flag overlapping regions.
 pub fn redact_spans_with(text: &str, spans: &[Span], mask: &Mask) -> String {
     if spans.is_empty() {
         return text.to_string();
@@ -38,14 +39,26 @@ pub fn redact_spans_with(text: &str, spans: &[Span], mask: &Mask) -> String {
 
     let mut out = String::with_capacity(text.len());
     let mut cursor = 0usize;
-    for span in ordered {
-        if span.start < cursor {
-            // Overlaps a region we already redacted; skip it.
+    let mut i = 0;
+    while i < ordered.len() {
+        let span = ordered[i];
+        if span.end <= cursor {
+            // Fully inside a region we already masked.
+            i += 1;
             continue;
         }
-        out.push_str(&text[cursor..span.start]);
-        out.push_str(&mask.render(&span.kind));
-        cursor = span.end;
+        let group_start = span.start.max(cursor);
+        let kind = &span.kind; // earliest-starting span owns the label
+        let mut group_end = span.end;
+        let mut j = i + 1;
+        while j < ordered.len() && ordered[j].start <= group_end {
+            group_end = group_end.max(ordered[j].end);
+            j += 1;
+        }
+        out.push_str(&text[cursor..group_start]);
+        out.push_str(&mask.render(kind));
+        cursor = group_end;
+        i = j;
     }
     out.push_str(&text[cursor..]);
     out
@@ -102,6 +115,15 @@ mod tests {
             Span::new(3, 8, "inner"),
         ];
         assert_eq!(redact_spans(text, &spans), "[REDACTED:wide] tail");
+    }
+
+    #[test]
+    fn merges_overlapping_spans_into_their_union() {
+        // The second span starts inside the first but extends past it; the tail
+        // must not leak.
+        let text = "0123456789 rest";
+        let spans = vec![Span::new(0, 5, "a"), Span::new(3, 10, "b")];
+        assert_eq!(redact_spans(text, &spans), "[REDACTED:a] rest");
     }
 
     #[test]

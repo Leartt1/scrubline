@@ -11,13 +11,14 @@ use regex::Regex;
 use crate::detector::Detector;
 use crate::span::Span;
 
-/// Runs a set of named regex patterns over each line.
+/// Runs a set of named regex patterns over each line. Kinds are owned strings so
+/// user-supplied patterns (from a `--rules` file) can be appended at runtime.
 pub struct PatternDetector {
-    patterns: Vec<(&'static str, Regex)>,
+    patterns: Vec<(String, Regex)>,
 }
 
 impl PatternDetector {
-    pub fn new(patterns: Vec<(&'static str, Regex)>) -> Self {
+    pub fn new(patterns: Vec<(String, Regex)>) -> Self {
         PatternDetector { patterns }
     }
 }
@@ -37,7 +38,7 @@ impl Detector for PatternDetector {
         let mut spans = Vec::new();
         for (kind, re) in &self.patterns {
             for m in re.find_iter(text) {
-                spans.push(Span::new(m.start(), m.end(), *kind));
+                spans.push(Span::new(m.start(), m.end(), kind.clone()));
             }
         }
         spans
@@ -46,7 +47,7 @@ impl Detector for PatternDetector {
 
 /// The built-in named-secret patterns. Each kind names what was found; the
 /// regex must match the full secret so the whole thing is masked.
-pub fn default_patterns() -> Vec<(&'static str, Regex)> {
+pub fn default_patterns() -> Vec<(String, Regex)> {
     let raw: &[(&str, &str)] = &[
         ("aws-access-key", r"(?:AKIA|ASIA)[A-Z0-9]{16}"),
         ("github-token", r"gh[pousr]_[A-Za-z0-9]{36,255}"),
@@ -60,7 +61,9 @@ pub fn default_patterns() -> Vec<(&'static str, Regex)> {
         ("email", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     ];
     raw.iter()
-        .map(|(kind, pat)| (*kind, Regex::new(pat).expect("built-in pattern must compile")))
+        .map(|(kind, pat)| {
+            ((*kind).to_string(), Regex::new(pat).expect("built-in pattern must compile"))
+        })
         .collect()
 }
 

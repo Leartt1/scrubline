@@ -4,6 +4,7 @@
 //! mask secrets/tokens/PII, write the cleaned stream to stdout. Never buffers
 //! the whole stream.
 
+pub mod config;
 pub mod detector;
 pub mod engine;
 pub mod entropy;

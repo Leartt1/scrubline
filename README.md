@@ -110,6 +110,68 @@ CI instead of shipping. The entropy detector only flags long tokens that mix
 upper/lower/digits and clear an entropy floor, which is what keeps SHAs and pod
 names safe.
 
+## Use it with Claude Code
+
+Coding agents read your logs, your `.env`, your command output — and whatever
+they read goes into the model's context (and your provider's). scrubline runs as
+a [Claude Code hook](https://code.claude.com/docs/en/hooks) and scrubs secrets
+out of tool I/O *before the model sees them*.
+
+Add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "scrubline", "args": ["--hook"] }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "scrubline", "args": ["--hook"] }] }
+    ]
+  }
+}
+```
+
+- **PreToolUse** rewrites `tool_input` — a secret in a `Bash` command or a file
+  write is masked before the tool runs.
+- **PostToolUse** rewrites the tool result — a `cat .env` or an API response is
+  masked before it returns to the model.
+
+One binary handles every event; it dispatches on the payload's
+`hook_event_name`. Given a `PostToolUse` payload, it returns:
+
+```console
+$ echo '{"hook_event_name":"PostToolUse","tool_response":"$ cat .env\nDATABASE_URL=postgres://app:s3cr3tP4ss@db:5432/main\nSTRIPE_KEY=sk_live_0123456789abcdef0123"}' | scrubline --hook
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":"$ cat .env\nDATABASE_URL=[REDACTED:credential-uri]\nSTRIPE_KEY=[REDACTED:stripe-key]"}}
+```
+
+If nothing is sensitive, scrubline returns `{}` and the tool call proceeds
+untouched — a hook failure can never block your agent.
+
+> `UserPromptSubmit` is also supported, but Claude Code doesn't allow a hook to
+> rewrite the prompt, so there scrubline only adds an advisory note.
+
+## Custom patterns
+
+Have an internal token format? Point `--rules` at a TOML file and your patterns
+join the built-ins:
+
+```toml
+# rules.toml
+[[pattern]]
+kind = "employee-id"
+regex = "EMP[0-9]{6}"
+
+[[pattern]]
+kind = "internal-token"
+regex = "INT-[A-Za-z0-9]{20,}"
+```
+
+```console
+$ echo 'user EMP123456 acting as service' | scrubline --rules rules.toml
+user [REDACTED:employee-id] acting as service
+```
+
 ## Install
 
 From source (Rust toolchain required):
@@ -148,6 +210,8 @@ Flags:
   instead of a `[REDACTED:<kind>]` label.
 - `--no-entropy` — disable the heuristic entropy detector (named-pattern and
   structured redaction still run).
+- `--rules <FILE>` — load extra named patterns from a TOML file.
+- `--hook` — run as a Claude Code hook (see above).
 
 ## Roadmap
 
@@ -156,8 +220,10 @@ Flags:
 - [x] Named-pattern detectors (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, PEM keys, credentialed URIs, emails)
 - [x] `--mask-char` and a real `--help`/`--version` CLI
 - [x] Conservative entropy detector with a precision/recall benchmark (and `--no-entropy`)
-- [ ] `--json` summary and a custom-pattern config file
-- [ ] Claude Code `PreToolUse` hook mode — strip secrets before they hit an agent's context
+- [x] Custom-pattern rules file (`--rules`)
+- [x] Claude Code hook mode — strip secrets from tool I/O before they hit an agent's context
+- [ ] `--stats` JSON summary of what was redacted
+- [ ] `crates.io` release and prebuilt binaries
 
 ## License
 

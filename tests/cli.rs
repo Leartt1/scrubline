@@ -83,6 +83,14 @@ fn no_entropy_flag_disables_entropy_detection() {
 }
 
 #[test]
+fn rules_file_adds_custom_patterns() {
+    let path = format!("{}/rules.toml", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "[[pattern]]\nkind = \"emp-id\"\nregex = \"EMP[0-9]{6}\"\n").unwrap();
+    let out = run_with(&["--rules", &path], "user EMP123456 logged in\n");
+    assert_eq!(out, "user [REDACTED:emp-id] logged in\n");
+}
+
+#[test]
 fn hook_mode_redacts_pre_tool_use_command() {
     let token = concat!("ghp_", "abcdefghijklmnopqrstuvwxyz0123456789");
     let payload =

@@ -4,15 +4,17 @@
 //! they scroll and the whole stream is never held in memory.
 
 use std::io::{self, BufRead, BufWriter, Read, Write};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
 
+use scrubline::config;
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
 use scrubline::entropy::EntropyDetector;
 use scrubline::mask::Mask;
-use scrubline::patterns::PatternDetector;
+use scrubline::patterns::{self, PatternDetector};
 
 /// Number of mask characters used for `--mask-char`, chosen to hide the original
 /// secret's length rather than reveal it.
@@ -38,6 +40,11 @@ struct Cli {
     /// model sees them. Dispatches on the payload's `hook_event_name`.
     #[arg(long)]
     hook: bool,
+
+    /// Load additional named patterns from a TOML rules file (each `[[pattern]]`
+    /// has a `kind` and a `regex`). Merged with the built-in patterns.
+    #[arg(long, value_name = "FILE")]
+    rules: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -46,7 +53,14 @@ fn main() -> ExitCode {
         Some(c) => Mask::Fixed(c.to_string().repeat(MASK_WIDTH)),
         None => Mask::Labeled,
     };
-    let engine = Engine::with_mask(default_detectors(cli.no_entropy), mask);
+    let detectors = match build_detectors(&cli) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("scrubline: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let engine = Engine::with_mask(detectors, mask);
 
     let result = if cli.hook { run_hook_mode(&engine) } else { run(&engine) };
     match result {
@@ -73,15 +87,23 @@ fn run_hook_mode(engine: &Engine) -> io::Result<()> {
     out.flush()
 }
 
-/// The value detectors run on every line: named patterns always, the entropy
-/// heuristic unless disabled. The structured (JSON/logfmt) layer runs regardless
-/// of this list.
-fn default_detectors(no_entropy: bool) -> Vec<Box<dyn Detector>> {
-    let mut detectors: Vec<Box<dyn Detector>> = vec![Box::new(PatternDetector::default())];
-    if !no_entropy {
+/// Build the value detectors: built-in named patterns plus any from `--rules`,
+/// then the entropy heuristic unless disabled. The structured (JSON/logfmt)
+/// layer runs regardless of this list. Returns an error if the rules file can't
+/// be read or parsed.
+fn build_detectors(cli: &Cli) -> Result<Vec<Box<dyn Detector>>, String> {
+    let mut patterns = patterns::default_patterns();
+    if let Some(path) = &cli.rules {
+        let src = std::fs::read_to_string(path)
+            .map_err(|e| format!("cannot read rules file {}: {e}", path.display()))?;
+        patterns.extend(config::parse_rules(&src)?);
+    }
+
+    let mut detectors: Vec<Box<dyn Detector>> = vec![Box::new(PatternDetector::new(patterns))];
+    if !cli.no_entropy {
         detectors.push(Box::new(EntropyDetector::default()));
     }
-    detectors
+    Ok(detectors)
 }
 
 fn run(engine: &Engine) -> io::Result<()> {

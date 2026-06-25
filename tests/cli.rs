@@ -65,3 +65,19 @@ fn redacts_named_pattern_secret_in_free_text() {
 fn mask_char_replaces_label_with_fixed_mask() {
     assert_eq!(run_with(&["--mask-char", "#"], "token=abc\n"), "token=########\n");
 }
+
+#[test]
+fn redacts_high_entropy_token_by_default() {
+    let secret = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
+    assert_eq!(
+        run(&format!("api responded {secret}\n")),
+        "api responded [REDACTED:high-entropy]\n"
+    );
+}
+
+#[test]
+fn no_entropy_flag_disables_entropy_detection() {
+    let secret = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
+    let line = format!("api responded {secret}\n");
+    assert_eq!(run_with(&["--no-entropy"], &line), line);
+}

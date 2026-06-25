@@ -10,6 +10,7 @@ use clap::Parser;
 
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
+use scrubline::entropy::EntropyDetector;
 use scrubline::mask::Mask;
 use scrubline::patterns::PatternDetector;
 
@@ -25,6 +26,12 @@ struct Cli {
     /// `[REDACTED:<kind>]` label.
     #[arg(long, value_name = "CHAR")]
     mask_char: Option<char>,
+
+    /// Disable the heuristic entropy detector (named patterns and structured
+    /// redaction still run). Use this if high-entropy values trip false
+    /// positives in your logs.
+    #[arg(long)]
+    no_entropy: bool,
 }
 
 fn main() -> ExitCode {
@@ -33,7 +40,7 @@ fn main() -> ExitCode {
         Some(c) => Mask::Fixed(c.to_string().repeat(MASK_WIDTH)),
         None => Mask::Labeled,
     };
-    let engine = Engine::with_mask(default_detectors(), mask);
+    let engine = Engine::with_mask(default_detectors(cli.no_entropy), mask);
     match run(&engine) {
         Ok(()) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.
@@ -45,11 +52,15 @@ fn main() -> ExitCode {
     }
 }
 
-/// The value detectors run on every line. Named-pattern detection is active; the
-/// entropy detector arrives on day 3. The structured (JSON/logfmt) layer runs
-/// regardless of this list.
-fn default_detectors() -> Vec<Box<dyn Detector>> {
-    vec![Box::new(PatternDetector::default())]
+/// The value detectors run on every line: named patterns always, the entropy
+/// heuristic unless disabled. The structured (JSON/logfmt) layer runs regardless
+/// of this list.
+fn default_detectors(no_entropy: bool) -> Vec<Box<dyn Detector>> {
+    let mut detectors: Vec<Box<dyn Detector>> = vec![Box::new(PatternDetector::default())];
+    if !no_entropy {
+        detectors.push(Box::new(EntropyDetector::default()));
+    }
+    detectors
 }
 
 fn run(engine: &Engine) -> io::Result<()> {

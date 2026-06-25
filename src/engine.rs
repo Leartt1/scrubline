@@ -43,6 +43,16 @@ impl Engine {
         redact_spans_with(line, &spans, &self.mask)
     }
 
+    /// Redact a possibly multi-line `text`, preserving `\n` line breaks. Used by
+    /// the hook integration, where a single field (a command, tool output) can
+    /// span several lines.
+    pub fn redact_text(&self, text: &str) -> String {
+        text.split('\n')
+            .map(|line| self.redact_line(line))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     fn detector_spans(&self, text: &str) -> Vec<Span> {
         self.detectors.iter().flat_map(|d| d.find(text)).collect()
     }
@@ -97,6 +107,13 @@ mod tests {
     fn leaves_clean_lines_unchanged() {
         let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
+    }
+
+    #[test]
+    fn redact_text_redacts_each_line_preserving_breaks() {
+        let e = Engine::new(vec![]);
+        let input = "user=bob\npassword=secret\nall good";
+        assert_eq!(e.redact_text(input), "user=bob\npassword=[REDACTED:password]\nall good");
     }
 
     #[test]

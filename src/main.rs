@@ -3,7 +3,7 @@
 //! Lines are processed and flushed one at a time, so secrets are masked live as
 //! they scroll and the whole stream is never held in memory.
 
-use std::io::{self, BufRead, BufWriter, Write};
+use std::io::{self, BufRead, BufWriter, Read, Write};
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -32,6 +32,12 @@ struct Cli {
     /// positives in your logs.
     #[arg(long)]
     no_entropy: bool,
+
+    /// Run as a Claude Code hook: read a hook JSON payload on stdin and write a
+    /// hook JSON response that redacts secrets from tool input/output before the
+    /// model sees them. Dispatches on the payload's `hook_event_name`.
+    #[arg(long)]
+    hook: bool,
 }
 
 fn main() -> ExitCode {
@@ -41,7 +47,9 @@ fn main() -> ExitCode {
         None => Mask::Labeled,
     };
     let engine = Engine::with_mask(default_detectors(cli.no_entropy), mask);
-    match run(&engine) {
+
+    let result = if cli.hook { run_hook_mode(&engine) } else { run(&engine) };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.
         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
@@ -50,6 +58,19 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Read a Claude Code hook payload from stdin and write the JSON response. Exit 0
+/// so Claude Code processes the response; on any trouble we still emit `{}` so a
+/// hook failure never blocks the agent.
+fn run_hook_mode(engine: &Engine) -> io::Result<()> {
+    let mut input = String::new();
+    io::stdin().lock().read_to_string(&mut input)?;
+    let response = scrubline::hook::run_hook(engine, &input);
+    let stdout = io::stdout();
+    let mut out = stdout.lock();
+    out.write_all(response.as_bytes())?;
+    out.flush()
 }
 
 /// The value detectors run on every line: named patterns always, the entropy

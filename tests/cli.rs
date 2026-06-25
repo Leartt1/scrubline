@@ -81,3 +81,14 @@ fn no_entropy_flag_disables_entropy_detection() {
     let line = format!("api responded {secret}\n");
     assert_eq!(run_with(&["--no-entropy"], &line), line);
 }
+
+#[test]
+fn hook_mode_redacts_pre_tool_use_command() {
+    let token = concat!("ghp_", "abcdefghijklmnopqrstuvwxyz0123456789");
+    let payload =
+        format!(r#"{{"hook_event_name":"PreToolUse","tool_input":{{"command":"push {token}"}}}}"#);
+    let out = run_with(&["--hook"], &payload);
+    assert!(out.contains("updatedInput"), "got: {out}");
+    assert!(out.contains("[REDACTED:github-token]"), "got: {out}");
+    assert!(!out.contains(token), "token leaked: {out}");
+}

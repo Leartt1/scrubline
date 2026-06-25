@@ -7,6 +7,7 @@
 pub mod detector;
 pub mod engine;
 pub mod entropy;
+pub mod hook;
 pub mod json;
 pub mod keys;
 pub mod logfmt;

@@ -30,11 +30,12 @@ struct RawPattern {
 /// Parse a TOML rules document into compiled `(kind, regex)` patterns. Returns a
 /// human-readable error on invalid TOML or an uncompilable regex.
 pub fn parse_rules(toml_src: &str) -> Result<Vec<(String, Regex)>, String> {
-    let raw: RawConfig = toml::from_str(toml_src).map_err(|e| format!("invalid rules file: {e}"))?;
+    let raw: RawConfig =
+        toml::from_str(toml_src).map_err(|e| format!("invalid rules file: {e}"))?;
     let mut rules = Vec::with_capacity(raw.pattern.len());
     for p in raw.pattern {
-        let re = Regex::new(&p.regex)
-            .map_err(|e| format!("invalid regex for '{}': {e}", p.kind))?;
+        let re =
+            Regex::new(&p.regex).map_err(|e| format!("invalid regex for '{}': {e}", p.kind))?;
         rules.push((p.kind, re));
     }
     Ok(rules)
@@ -62,7 +63,10 @@ mod tests {
     fn rejects_uncompilable_regex() {
         let src = "[[pattern]]\nkind = \"bad\"\nregex = \"[unclosed\"\n";
         let err = parse_rules(src).unwrap_err();
-        assert!(err.contains("bad"), "error should name the offending kind: {err}");
+        assert!(
+            err.contains("bad"),
+            "error should name the offending kind: {err}"
+        );
     }
 
     #[test]

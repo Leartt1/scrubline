@@ -63,7 +63,10 @@ fn redacts_named_pattern_secret_in_free_text() {
 
 #[test]
 fn mask_char_replaces_label_with_fixed_mask() {
-    assert_eq!(run_with(&["--mask-char", "#"], "token=abc\n"), "token=########\n");
+    assert_eq!(
+        run_with(&["--mask-char", "#"], "token=abc\n"),
+        "token=########\n"
+    );
 }
 
 #[test]
@@ -102,7 +105,10 @@ fn stats_flag_writes_json_summary_to_stderr() {
     let stderr = String::from_utf8(out.stderr).unwrap();
 
     // The cleaned stream still goes to stdout untouched by the summary.
-    assert!(stdout.contains("token=[REDACTED:token]"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("token=[REDACTED:token]"),
+        "stdout: {stdout}"
+    );
     // The summary goes to stderr as JSON.
     assert!(stderr.contains("\"lines\":3"), "stderr: {stderr}");
     assert!(stderr.contains("\"redactions\":2"), "stderr: {stderr}");
@@ -112,7 +118,11 @@ fn stats_flag_writes_json_summary_to_stderr() {
 #[test]
 fn rules_file_adds_custom_patterns() {
     let path = format!("{}/rules.toml", env!("CARGO_TARGET_TMPDIR"));
-    std::fs::write(&path, "[[pattern]]\nkind = \"emp-id\"\nregex = \"EMP[0-9]{6}\"\n").unwrap();
+    std::fs::write(
+        &path,
+        "[[pattern]]\nkind = \"emp-id\"\nregex = \"EMP[0-9]{6}\"\n",
+    )
+    .unwrap();
     let out = run_with(&["--rules", &path], "user EMP123456 logged in\n");
     assert_eq!(out, "user [REDACTED:emp-id] logged in\n");
 }

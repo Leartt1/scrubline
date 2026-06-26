@@ -22,7 +22,10 @@ pub struct LiteralDetector {
 
 impl LiteralDetector {
     pub fn new(needle: impl Into<String>, kind: impl Into<String>) -> Self {
-        LiteralDetector { needle: needle.into(), kind: kind.into() }
+        LiteralDetector {
+            needle: needle.into(),
+            kind: kind.into(),
+        }
     }
 }
 

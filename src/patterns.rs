@@ -57,12 +57,18 @@ pub fn default_patterns() -> Vec<(String, Regex)> {
         ("google-api-key", r"AIza[A-Za-z0-9_-]{35}"),
         ("jwt", r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"),
         ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
-        ("credential-uri", r"[a-zA-Z][a-zA-Z0-9+.-]*://[^:@\s/]*:[^@\s/]+@\S+"),
+        (
+            "credential-uri",
+            r"[a-zA-Z][a-zA-Z0-9+.-]*://[^:@\s/]*:[^@\s/]+@\S+",
+        ),
         ("email", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
     ];
     raw.iter()
         .map(|(kind, pat)| {
-            ((*kind).to_string(), Regex::new(pat).expect("built-in pattern must compile"))
+            (
+                (*kind).to_string(),
+                Regex::new(pat).expect("built-in pattern must compile"),
+            )
         })
         .collect()
 }
@@ -85,7 +91,10 @@ mod tests {
     #[test]
     fn masks_aws_access_key() {
         let key = concat!("AKIA", "IOSFODNN7EXAMPLE");
-        assert_eq!(redact(&format!("key {key} end")), "key [REDACTED:aws-access-key] end");
+        assert_eq!(
+            redact(&format!("key {key} end")),
+            "key [REDACTED:aws-access-key] end"
+        );
     }
 
     #[test]
@@ -120,13 +129,17 @@ mod tests {
 
     #[test]
     fn masks_jwt() {
-        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        let jwt =
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
         assert_eq!(redact(&format!("token={jwt}")), "token=[REDACTED:jwt]");
     }
 
     #[test]
     fn masks_pem_private_key_header() {
-        assert_eq!(redact("-----BEGIN RSA PRIVATE KEY-----"), "[REDACTED:private-key]");
+        assert_eq!(
+            redact("-----BEGIN RSA PRIVATE KEY-----"),
+            "[REDACTED:private-key]"
+        );
     }
 
     #[test]
@@ -139,7 +152,10 @@ mod tests {
 
     #[test]
     fn masks_email() {
-        assert_eq!(redact("from alice@example.com today"), "from [REDACTED:email] today");
+        assert_eq!(
+            redact("from alice@example.com today"),
+            "from [REDACTED:email] today"
+        );
     }
 
     #[test]

@@ -42,8 +42,8 @@ pub fn sensitive_spans(line: &str) -> Vec<Span> {
             let mut j = content_start;
             while j < len {
                 match bytes[j] {
-                    b'\\' => j += 2,    // skip an escaped char (e.g. \")
-                    b'"' => break,      // closing quote
+                    b'\\' => j += 2, // skip an escaped char (e.g. \")
+                    b'"' => break,   // closing quote
                     _ => j += 1,
                 }
             }
@@ -77,7 +77,10 @@ mod tests {
 
     #[test]
     fn redacts_unquoted_sensitive_value() {
-        assert_eq!(redact("a=1 token=ghp_X b=2"), "a=1 token=[REDACTED:token] b=2");
+        assert_eq!(
+            redact("a=1 token=ghp_X b=2"),
+            "a=1 token=[REDACTED:token] b=2"
+        );
     }
 
     #[test]

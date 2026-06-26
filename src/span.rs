@@ -15,7 +15,11 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: usize, end: usize, kind: impl Into<String>) -> Self {
-        Span { start, end, kind: kind.into() }
+        Span {
+            start,
+            end,
+            kind: kind.into(),
+        }
     }
 }
 
@@ -80,7 +84,10 @@ mod tests {
     fn replaces_single_span_with_kind_marker() {
         let text = "token=ghp_ABC123 ok";
         let spans = vec![Span::new(6, 16, "github-token")];
-        assert_eq!(redact_spans(text, &spans), "token=[REDACTED:github-token] ok");
+        assert_eq!(
+            redact_spans(text, &spans),
+            "token=[REDACTED:github-token] ok"
+        );
     }
 
     #[test]
@@ -118,10 +125,7 @@ mod tests {
     #[test]
     fn collapses_overlapping_spans_keeping_first() {
         let text = "secretvalue tail";
-        let spans = vec![
-            Span::new(0, 11, "wide"),
-            Span::new(3, 8, "inner"),
-        ];
+        let spans = vec![Span::new(0, 11, "wide"), Span::new(3, 8, "inner")];
         assert_eq!(redact_spans(text, &spans), "[REDACTED:wide] tail");
     }
 
@@ -142,7 +146,10 @@ mod tests {
             Span::new(12, 19, "aws-key"),
         ];
         let (_, kinds) = redact_spans_reported(text, &spans, &Mask::Labeled);
-        assert_eq!(kinds, vec!["github-token".to_string(), "aws-key".to_string()]);
+        assert_eq!(
+            kinds,
+            vec!["github-token".to_string(), "aws-key".to_string()]
+        );
     }
 
     #[test]

@@ -29,7 +29,8 @@ fn positives() -> Vec<(String, String)> {
     let slack = concat!("xoxb", "-0123456789abcdefghij");
     let stripe = concat!("sk_", "live_0123456789abcdef0123");
     let google = concat!("AIza", "SyA1bcdEfghIjklMnopQrstUvwxyz01234");
-    let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    let jwt =
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
     let ent1 = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
     let ent2 = "Q8vN2mZ5kP7wL4xR9tB3hC6yF1dG0sJ";
     let ent3 = "8f3K-mP9xQ2w-Lr7Tn4Vb1Zc6Hy0Ms5dA";
@@ -38,26 +39,62 @@ fn positives() -> Vec<(String, String)> {
     let mut pos = |line: String, secret: &str| v.push((line, secret.to_string()));
 
     // free-text named patterns
-    pos(format!("level=error msg=\"auth failed\" aws_key={aws}"), aws);
+    pos(
+        format!("level=error msg=\"auth failed\" aws_key={aws}"),
+        aws,
+    );
     pos(format!("webhook delivered with token {github}"), github);
     pos(format!("ci using {gitlab} to clone"), gitlab);
     pos(format!("slack notify failed token={slack}"), slack);
     pos(format!("charge created key={stripe}"), stripe);
     pos(format!("maps request denied key={google}"), google);
     pos(format!("decoded session={jwt}"), jwt);
-    pos("-----BEGIN RSA PRIVATE KEY-----".to_string(), "BEGIN RSA PRIVATE KEY");
-    pos("connecting to postgres://app:s3cr3tP4ss@db.internal:5432/main".to_string(), "s3cr3tP4ss");
-    pos("cache at redis://:r3disPwd9@cache:6379/0".to_string(), "r3disPwd9");
-    pos("notify owner contact john.doe@example.com about outage".to_string(), "john.doe@example.com");
+    pos(
+        "-----BEGIN RSA PRIVATE KEY-----".to_string(),
+        "BEGIN RSA PRIVATE KEY",
+    );
+    pos(
+        "connecting to postgres://app:s3cr3tP4ss@db.internal:5432/main".to_string(),
+        "s3cr3tP4ss",
+    );
+    pos(
+        "cache at redis://:r3disPwd9@cache:6379/0".to_string(),
+        "r3disPwd9",
+    );
+    pos(
+        "notify owner contact john.doe@example.com about outage".to_string(),
+        "john.doe@example.com",
+    );
 
     // structured (json / logfmt) — value must vanish
-    pos("{\"level\":\"info\",\"authorization\":\"Bearer abc.def.ghi\",\"u\":\"bob\"}".to_string(), "abc.def.ghi");
-    pos("{\"db\":{\"password\":\"hunter2plzdont\",\"host\":\"db\"}}".to_string(), "hunter2plzdont");
-    pos("{\"api_key\":\"qwerty-do-not-log-me\"}".to_string(), "qwerty-do-not-log-me");
-    pos("{\"set-cookie\":\"sess=ZmFrZXNlc3Npb24; HttpOnly\"}".to_string(), "ZmFrZXNlc3Npb24");
-    pos("ts=2026-06-24 level=warn password=\"corrleakhorse\" path=/x".to_string(), "corrleakhorse");
-    pos("level=info token=tok_dontleakthisvalue user=bob".to_string(), "tok_dontleakthisvalue");
-    pos("client_secret=verysecretclientvalue grant=code".to_string(), "verysecretclientvalue");
+    pos(
+        "{\"level\":\"info\",\"authorization\":\"Bearer abc.def.ghi\",\"u\":\"bob\"}".to_string(),
+        "abc.def.ghi",
+    );
+    pos(
+        "{\"db\":{\"password\":\"hunter2plzdont\",\"host\":\"db\"}}".to_string(),
+        "hunter2plzdont",
+    );
+    pos(
+        "{\"api_key\":\"qwerty-do-not-log-me\"}".to_string(),
+        "qwerty-do-not-log-me",
+    );
+    pos(
+        "{\"set-cookie\":\"sess=ZmFrZXNlc3Npb24; HttpOnly\"}".to_string(),
+        "ZmFrZXNlc3Npb24",
+    );
+    pos(
+        "ts=2026-06-24 level=warn password=\"corrleakhorse\" path=/x".to_string(),
+        "corrleakhorse",
+    );
+    pos(
+        "level=info token=tok_dontleakthisvalue user=bob".to_string(),
+        "tok_dontleakthisvalue",
+    );
+    pos(
+        "client_secret=verysecretclientvalue grant=code".to_string(),
+        "verysecretclientvalue",
+    );
 
     // unknown high-entropy tokens (entropy detector)
     pos(format!("api responded with bearer {ent1}"), ent1);
@@ -114,15 +151,27 @@ struct Metrics {
 impl Metrics {
     fn precision(&self) -> f64 {
         let d = self.tp + self.fp;
-        if d == 0 { 1.0 } else { self.tp as f64 / d as f64 }
+        if d == 0 {
+            1.0
+        } else {
+            self.tp as f64 / d as f64
+        }
     }
     fn recall(&self) -> f64 {
         let d = self.tp + self.misses;
-        if d == 0 { 1.0 } else { self.tp as f64 / d as f64 }
+        if d == 0 {
+            1.0
+        } else {
+            self.tp as f64 / d as f64
+        }
     }
     fn f1(&self) -> f64 {
         let (p, r) = (self.precision(), self.recall());
-        if p + r == 0.0 { 0.0 } else { 2.0 * p * r / (p + r) }
+        if p + r == 0.0 {
+            0.0
+        } else {
+            2.0 * p * r / (p + r)
+        }
     }
 }
 
@@ -153,8 +202,15 @@ fn precision_recall_meets_floor() {
 
     eprintln!("\n  scrubline precision/recall");
     eprintln!("  --------------------------");
-    eprintln!("  positives: {}   negatives: {}", m.tp + m.misses, m.fp + m.tn);
-    eprintln!("  TP={} FP={} FN(miss)={} TN={}", m.tp, m.fp, m.misses, m.tn);
+    eprintln!(
+        "  positives: {}   negatives: {}",
+        m.tp + m.misses,
+        m.fp + m.tn
+    );
+    eprintln!(
+        "  TP={} FP={} FN(miss)={} TN={}",
+        m.tp, m.fp, m.misses, m.tn
+    );
     eprintln!("  precision: {:.3}", m.precision());
     eprintln!("  recall:    {:.3}", m.recall());
     eprintln!("  f1:        {:.3}", m.f1());
@@ -172,6 +228,14 @@ fn precision_recall_meets_floor() {
     }
     eprintln!();
 
-    assert!(m.precision() >= 0.97, "precision {:.3} below floor 0.97", m.precision());
-    assert!(m.recall() >= 0.95, "recall {:.3} below floor 0.95", m.recall());
+    assert!(
+        m.precision() >= 0.97,
+        "precision {:.3} below floor 0.97",
+        m.precision()
+    );
+    assert!(
+        m.recall() >= 0.95,
+        "recall {:.3} below floor 0.95",
+        m.recall()
+    );
 }

@@ -70,7 +70,11 @@ fn main() -> ExitCode {
     };
     let engine = Engine::with_mask(detectors, mask);
 
-    let result = if cli.hook { run_hook_mode(&engine) } else { run(&engine, cli.stats) };
+    let result = if cli.hook {
+        run_hook_mode(&engine)
+    } else {
+        run(&engine, cli.stats)
+    };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.

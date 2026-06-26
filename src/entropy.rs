@@ -31,7 +31,10 @@ pub struct EntropyDetector {
 
 impl Default for EntropyDetector {
     fn default() -> Self {
-        EntropyDetector { min_len: MIN_LEN, min_entropy: MIN_ENTROPY }
+        EntropyDetector {
+            min_len: MIN_LEN,
+            min_entropy: MIN_ENTROPY,
+        }
     }
 }
 
@@ -201,7 +204,10 @@ mod tests {
     #[test]
     fn flags_high_entropy_mixed_token() {
         let secret = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
-        assert_eq!(redact(&format!("token {secret} end")), "token [REDACTED:high-entropy] end");
+        assert_eq!(
+            redact(&format!("token {secret} end")),
+            "token [REDACTED:high-entropy] end"
+        );
     }
 
     #[test]

@@ -48,7 +48,9 @@ fn handle_pre_tool_use(engine: &Engine, payload: &Value) -> String {
 fn handle_post_tool_use(engine: &Engine, payload: &Value) -> String {
     // The result field has varied across versions/tools; accept either name and
     // any shape (string or structured), redacting every string within it.
-    let result = payload.get("tool_response").or_else(|| payload.get("tool_output"));
+    let result = payload
+        .get("tool_response")
+        .or_else(|| payload.get("tool_output"));
     if let Some(result) = result {
         let mut redacted = result.clone();
         if redact_strings(engine, &mut redacted) {
@@ -151,7 +153,9 @@ mod tests {
         .to_string();
 
         let v = parse(&run_hook(&engine(), &payload));
-        let cmd = v["hookSpecificOutput"]["updatedInput"]["command"].as_str().unwrap();
+        let cmd = v["hookSpecificOutput"]["updatedInput"]["command"]
+            .as_str()
+            .unwrap();
         assert_eq!(v["hookSpecificOutput"]["hookEventName"], "PreToolUse");
         assert!(cmd.contains("[REDACTED:github-token]"));
         assert!(!cmd.contains(token));
@@ -167,7 +171,9 @@ mod tests {
         .to_string();
 
         let v = parse(&run_hook(&engine(), &payload));
-        let out = v["hookSpecificOutput"]["updatedToolOutput"].as_str().unwrap();
+        let out = v["hookSpecificOutput"]["updatedToolOutput"]
+            .as_str()
+            .unwrap();
         assert!(out.contains("[REDACTED:password]"));
         assert!(!out.contains("leakedpw"));
     }
@@ -181,7 +187,9 @@ mod tests {
         .to_string();
 
         let v = parse(&run_hook(&engine(), &payload));
-        let out = v["hookSpecificOutput"]["updatedToolOutput"].as_str().unwrap();
+        let out = v["hookSpecificOutput"]["updatedToolOutput"]
+            .as_str()
+            .unwrap();
         assert!(!out.contains("leakedpw"));
     }
 
@@ -195,7 +203,9 @@ mod tests {
         .to_string();
 
         let v = parse(&run_hook(&engine(), &payload));
-        let ctx = v["hookSpecificOutput"]["additionalContext"].as_str().unwrap();
+        let ctx = v["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .unwrap();
         assert_eq!(v["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit");
         assert!(ctx.contains("secret"));
         // We must NOT claim to rewrite the prompt.

@@ -95,18 +95,30 @@ mod tests {
     #[test]
     fn structurally_redacts_logfmt_without_detectors() {
         let e = engine_with(vec![]);
-        assert_eq!(e.redact_line("level=info token=abc"), "level=info token=[REDACTED:token]");
+        assert_eq!(
+            e.redact_line("level=info token=abc"),
+            "level=info token=[REDACTED:token]"
+        );
     }
 
     #[test]
     fn applies_detectors_on_plaintext() {
-        let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
-        assert_eq!(e.redact_line("see ghp_SECRET here"), "see [REDACTED:github-token] here");
+        let e = engine_with(vec![Box::new(LiteralDetector::new(
+            "ghp_SECRET",
+            "github-token",
+        ))]);
+        assert_eq!(
+            e.redact_line("see ghp_SECRET here"),
+            "see [REDACTED:github-token] here"
+        );
     }
 
     #[test]
     fn applies_detectors_inside_json_non_sensitive_values() {
-        let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
+        let e = engine_with(vec![Box::new(LiteralDetector::new(
+            "ghp_SECRET",
+            "github-token",
+        ))]);
         assert_eq!(
             e.redact_line(r#"{"msg":"ghp_SECRET"}"#),
             r#"{"msg":"[REDACTED:github-token]"}"#
@@ -115,13 +127,19 @@ mod tests {
 
     #[test]
     fn structured_span_wins_when_it_overlaps_a_detector() {
-        let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
+        let e = engine_with(vec![Box::new(LiteralDetector::new(
+            "ghp_SECRET",
+            "github-token",
+        ))]);
         assert_eq!(e.redact_line("token=ghp_SECRET"), "token=[REDACTED:token]");
     }
 
     #[test]
     fn leaves_clean_lines_unchanged() {
-        let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
+        let e = engine_with(vec![Box::new(LiteralDetector::new(
+            "ghp_SECRET",
+            "github-token",
+        ))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
     }
 
@@ -139,7 +157,10 @@ mod tests {
     fn redact_text_redacts_each_line_preserving_breaks() {
         let e = Engine::new(vec![]);
         let input = "user=bob\npassword=secret\nall good";
-        assert_eq!(e.redact_text(input), "user=bob\npassword=[REDACTED:password]\nall good");
+        assert_eq!(
+            e.redact_text(input),
+            "user=bob\npassword=[REDACTED:password]\nall good"
+        );
     }
 
     #[test]

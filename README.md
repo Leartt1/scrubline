@@ -236,11 +236,23 @@ Flags:
 
 - `--mask-char <CHAR>` — replace secrets with a fixed run of one character
   instead of a `[REDACTED:<kind>]` label.
+- `--hash` — replace each secret with `[REDACTED:<kind>:<hash>]`, a stable tag
+  so equal secrets correlate across the log without exposing the value.
+- `--partial` — replace each secret with `****` and its last four characters.
+- `--allow <FILE>` — never redact values listed in this file (one per line;
+  `re:PATTERN` for a regex). The escape hatch for false positives.
 - `--no-entropy` — disable the heuristic entropy detector (named-pattern and
   structured redaction still run).
 - `--rules <FILE>` — load extra named patterns from a TOML file.
 - `--stats` — write a JSON redaction summary to stderr at end of stream.
 - `--hook` — run as a Claude Code hook (see above).
+
+`--mask-char`, `--hash`, and `--partial` are mutually exclusive.
+
+```console
+$ printf 'a=ghp_DEADBEEFdeadbeef0123456789ABCDEFwxyz b=ghp_DEADBEEFdeadbeef0123456789ABCDEFwxyz\n' | scrubline --hash
+a=[REDACTED:github-token:501bcd] b=[REDACTED:github-token:501bcd]
+```
 
 ## Roadmap
 

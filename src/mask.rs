@@ -58,7 +58,10 @@ mod tests {
 
     #[test]
     fn labeled_includes_the_kind() {
-        assert_eq!(Mask::Labeled.render("token", "ghp_secret"), "[REDACTED:token]");
+        assert_eq!(
+            Mask::Labeled.render("token", "ghp_secret"),
+            "[REDACTED:token]"
+        );
     }
 
     #[test]
@@ -81,7 +84,10 @@ mod tests {
 
     #[test]
     fn partial_reveals_last_four() {
-        assert_eq!(Mask::Partial.render("k", "sk_live_0123456789cdef"), "****cdef");
+        assert_eq!(
+            Mask::Partial.render("k", "sk_live_0123456789cdef"),
+            "****cdef"
+        );
     }
 
     #[test]

@@ -3,11 +3,13 @@
 //! Lines are processed and flushed one at a time, so secrets are masked live as
 //! they scroll and the whole stream is never held in memory.
 
+use std::collections::BTreeMap;
 use std::io::{self, BufRead, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use serde_json::json;
 
 use scrubline::config;
 use scrubline::detector::Detector;
@@ -45,6 +47,12 @@ struct Cli {
     /// has a `kind` and a `regex`). Merged with the built-in patterns.
     #[arg(long, value_name = "FILE")]
     rules: Option<PathBuf>,
+
+    /// At end of stream, write a JSON redaction summary (line count, total
+    /// redactions, and counts per kind) to stderr. The cleaned stream on stdout
+    /// is unaffected.
+    #[arg(long)]
+    stats: bool,
 }
 
 fn main() -> ExitCode {
@@ -62,7 +70,7 @@ fn main() -> ExitCode {
     };
     let engine = Engine::with_mask(detectors, mask);
 
-    let result = if cli.hook { run_hook_mode(&engine) } else { run(&engine) };
+    let result = if cli.hook { run_hook_mode(&engine) } else { run(&engine, cli.stats) };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.
@@ -106,11 +114,15 @@ fn build_detectors(cli: &Cli) -> Result<Vec<Box<dyn Detector>>, String> {
     Ok(detectors)
 }
 
-fn run(engine: &Engine) -> io::Result<()> {
+fn run(engine: &Engine, stats: bool) -> io::Result<()> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let stdout = io::stdout();
     let mut out = BufWriter::new(stdout.lock());
+
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut lines: u64 = 0;
+    let mut redactions: u64 = 0;
 
     let mut line = String::new();
     loop {
@@ -119,10 +131,28 @@ fn run(engine: &Engine) -> io::Result<()> {
             break; // EOF
         }
         let (content, terminator) = split_terminator(&line);
-        let cleaned = engine.redact_line(content);
+        let cleaned = if stats {
+            let (cleaned, kinds) = engine.redact_line_report(content);
+            lines += 1;
+            redactions += kinds.len() as u64;
+            for kind in kinds {
+                *counts.entry(kind).or_default() += 1;
+            }
+            cleaned
+        } else {
+            engine.redact_line(content)
+        };
         out.write_all(cleaned.as_bytes())?;
         out.write_all(terminator.as_bytes())?;
         out.flush()?; // emit each line as soon as it is cleaned
+    }
+
+    if stats {
+        out.flush()?;
+        let by_kind: serde_json::Map<String, serde_json::Value> =
+            counts.into_iter().map(|(k, v)| (k, json!(v))).collect();
+        let summary = json!({ "lines": lines, "redactions": redactions, "by_kind": by_kind });
+        eprintln!("{summary}");
     }
     Ok(())
 }

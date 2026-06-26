@@ -83,6 +83,33 @@ fn no_entropy_flag_disables_entropy_detection() {
 }
 
 #[test]
+fn stats_flag_writes_json_summary_to_stderr() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_scrubline"))
+        .arg("--stats")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn scrubline");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"token=abc\nclean line\npassword=secret\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8(out.stderr).unwrap();
+
+    // The cleaned stream still goes to stdout untouched by the summary.
+    assert!(stdout.contains("token=[REDACTED:token]"), "stdout: {stdout}");
+    // The summary goes to stderr as JSON.
+    assert!(stderr.contains("\"lines\":3"), "stderr: {stderr}");
+    assert!(stderr.contains("\"redactions\":2"), "stderr: {stderr}");
+    assert!(stderr.contains("token"), "stderr: {stderr}");
+}
+
+#[test]
 fn rules_file_adds_custom_patterns() {
     let path = format!("{}/rules.toml", env!("CARGO_TARGET_TMPDIR"));
     std::fs::write(&path, "[[pattern]]\nkind = \"emp-id\"\nregex = \"EMP[0-9]{6}\"\n").unwrap();

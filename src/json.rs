@@ -45,7 +45,11 @@ fn redact_value(value: &mut Value, mask: &Mask, kinds: &mut Vec<String>) {
             for (key, child) in map.iter_mut() {
                 if is_sensitive_key(key) {
                     let kind = key.to_ascii_lowercase();
-                    *child = Value::String(mask.render(&kind));
+                    let value_str = match &*child {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    *child = Value::String(mask.render(&kind, &value_str));
                     kinds.push(kind);
                 } else {
                     redact_value(child, mask, kinds);

@@ -67,7 +67,7 @@ pub fn redact_spans_reported(text: &str, spans: &[Span], mask: &Mask) -> (String
             j += 1;
         }
         out.push_str(&text[cursor..group_start]);
-        out.push_str(&mask.render(kind));
+        out.push_str(&mask.render(kind, &text[group_start..group_end]));
         kinds.push(kind.clone());
         cursor = group_end;
         i = j;

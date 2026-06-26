@@ -1,0 +1,9 @@
+2026-06-24T10:15:01Z level=info msg="server started" port=8080
+2026-06-24T10:15:02Z level=info user=alice request_id=550e8400-e29b-41d4-a716-446655440000
+2026-06-24T10:15:03Z level=debug authorization="Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+2026-06-24T10:15:04Z level=warn msg="db connect" dsn=postgres://app:s3cr3tP4ssw0rd@db.internal:5432/main
+2026-06-24T10:15:05Z level=info commit=9fceb02d0ae598e95dc970b74767f19372d61af8 deploy=ok
+2026-06-24T10:15:06Z level=error msg="email send failed" to=customer@example.com
+2026-06-24T10:15:07Z level=debug session_token=Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW
+2026-06-24T10:15:08Z level=info pod=nginx-7d8b49557c-x2vfq status=Running
+{"level":"info","msg":"login","password":"hunter2","user":"bob"}

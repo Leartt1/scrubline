@@ -31,6 +31,9 @@ fn positives() -> Vec<(String, String)> {
     let google = concat!("AIza", "SyA1bcdEfghIjklMnopQrstUvwxyz01234");
     let jwt =
         "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    let openai = concat!("sk-", "proj-abcdefghij0123456789KLMNOPqrst");
+    let anthropic = concat!("sk-", "ant-api03-abcdefghij0123456789ABCD");
+    let npm = concat!("npm_", "abcdefghij0123456789abcdefghij012345");
     let ent1 = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
     let ent2 = "Q8vN2mZ5kP7wL4xR9tB3hC6yF1dG0sJ";
     let ent3 = "8f3K-mP9xQ2w-Lr7Tn4Vb1Zc6Hy0Ms5dA";
@@ -65,6 +68,9 @@ fn positives() -> Vec<(String, String)> {
         "notify owner contact john.doe@example.com about outage".to_string(),
         "john.doe@example.com",
     );
+    pos(format!("openai call failed key={openai}"), openai);
+    pos(format!("anthropic client init {anthropic}"), anthropic);
+    pos(format!("npm publish auth {npm}"), npm);
 
     // structured (json / logfmt) — value must vanish
     pos(
@@ -90,6 +96,14 @@ fn positives() -> Vec<(String, String)> {
     pos(
         "level=info token=tok_dontleakthisvalue user=bob".to_string(),
         "tok_dontleakthisvalue",
+    );
+    pos(
+        "db_password=plainbutsecret123 host=db".to_string(),
+        "plainbutsecret123",
+    );
+    pos(
+        "session_token=opaquevalue42 user=bob".to_string(),
+        "opaquevalue42",
     );
     pos(
         "client_secret=verysecretclientvalue grant=code".to_string(),

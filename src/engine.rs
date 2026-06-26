@@ -6,17 +6,19 @@
 //!   * everything else     -> collect logfmt sensitive-key value spans plus every
 //!     detector's spans, and mask them in one pass (overlaps collapse).
 
+use crate::allowlist::Allowlist;
 use crate::detector::Detector;
 use crate::json::{redact_json_reported, redact_json_with};
 use crate::logfmt;
 use crate::mask::Mask;
 use crate::span::{Span, redact_spans_reported, redact_spans_with};
 
-/// Holds the configured detectors and mask style, and applies the full
-/// redaction pipeline.
+/// Holds the configured detectors, mask style, and allowlist, and applies the
+/// full redaction pipeline.
 pub struct Engine {
     detectors: Vec<Box<dyn Detector>>,
     mask: Mask,
+    allow: Allowlist,
 }
 
 impl Engine {
@@ -27,27 +29,40 @@ impl Engine {
 
     /// Build an engine with a specific mask style.
     pub fn with_mask(detectors: Vec<Box<dyn Detector>>, mask: Mask) -> Self {
-        Engine { detectors, mask }
+        Engine {
+            detectors,
+            mask,
+            allow: Allowlist::default(),
+        }
+    }
+
+    /// Set an allowlist of values that must never be redacted.
+    pub fn with_allowlist(mut self, allow: Allowlist) -> Self {
+        self.allow = allow;
+        self
     }
 
     /// Redact a single line, returning the cleaned text (no trailing newline
     /// handling — the caller owns line framing).
     pub fn redact_line(&self, line: &str) -> String {
-        if let Some(structured) = redact_json_with(line, &self.mask) {
-            let spans = self.detector_spans(&structured);
+        if let Some(structured) = redact_json_with(line, &self.mask, &self.allow) {
+            let mut spans = self.detector_spans(&structured);
+            self.retain_allowed(&structured, &mut spans);
             return redact_spans_with(&structured, &spans, &self.mask);
         }
 
         let mut spans = logfmt::sensitive_spans(line);
         spans.extend(self.detector_spans(line));
+        self.retain_allowed(line, &mut spans);
         redact_spans_with(line, &spans, &self.mask)
     }
 
     /// Redact a single line and report the kind of every redaction applied (for
     /// `--stats`). Same pipeline as [`Engine::redact_line`].
     pub fn redact_line_report(&self, line: &str) -> (String, Vec<String>) {
-        if let Some((structured, mut kinds)) = redact_json_reported(line, &self.mask) {
-            let spans = self.detector_spans(&structured);
+        if let Some((structured, mut kinds)) = redact_json_reported(line, &self.mask, &self.allow) {
+            let mut spans = self.detector_spans(&structured);
+            self.retain_allowed(&structured, &mut spans);
             let (out, more) = redact_spans_reported(&structured, &spans, &self.mask);
             kinds.extend(more);
             return (out, kinds);
@@ -55,7 +70,16 @@ impl Engine {
 
         let mut spans = logfmt::sensitive_spans(line);
         spans.extend(self.detector_spans(line));
+        self.retain_allowed(line, &mut spans);
         redact_spans_reported(line, &spans, &self.mask)
+    }
+
+    /// Drop any span whose matched text is allowlisted, so it is left untouched.
+    fn retain_allowed(&self, text: &str, spans: &mut Vec<Span>) {
+        if self.allow.is_empty() {
+            return;
+        }
+        spans.retain(|s| !self.allow.is_allowed(&text[s.start..s.end]));
     }
 
     /// Redact a possibly multi-line `text`, preserving `\n` line breaks. Used by
@@ -141,6 +165,31 @@ mod tests {
             "github-token",
         ))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
+    }
+
+    #[test]
+    fn allowlist_suppresses_matching_detector_span() {
+        let allow = crate::allowlist::parse_allowlist("ghp_SECRET").unwrap();
+        let e = Engine::new(vec![Box::new(LiteralDetector::new(
+            "ghp_SECRET",
+            "github-token",
+        ))])
+        .with_allowlist(allow);
+        assert_eq!(e.redact_line("see ghp_SECRET here"), "see ghp_SECRET here");
+    }
+
+    #[test]
+    fn allowlist_suppresses_json_value_but_not_others() {
+        let allow = crate::allowlist::parse_allowlist("public-value").unwrap();
+        let e = Engine::new(vec![]).with_allowlist(allow);
+        assert_eq!(
+            e.redact_line(r#"{"token":"public-value"}"#),
+            r#"{"token":"public-value"}"#
+        );
+        assert_eq!(
+            e.redact_line(r#"{"token":"secret-value"}"#),
+            r#"{"token":"[REDACTED:token]"}"#
+        );
     }
 
     #[test]

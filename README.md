@@ -1,5 +1,8 @@
 # scrubline
 
+[![CI](https://github.com/Leartt1/scrubline/actions/workflows/ci.yml/badge.svg)](https://github.com/Leartt1/scrubline/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 **Secrets and PII never leave the pipe.**
 
 `scrubline` is a streaming redaction filter. Put it in front of any log stream
@@ -15,6 +18,30 @@ ts=2026-06-24 level=warn password="[REDACTED:password]" path=/health
 It's not a scanner. `gitleaks` and `trufflehog` *find* secrets and report them.
 `scrubline` *removes* them from a stream you're piping onward — and re-emits the
 cleaned stream so the next stage never sees the original.
+
+## Demo
+
+`scrubline` masks five different kinds of secret in this log while leaving the
+UUID, the commit SHA, and the Kubernetes pod name (the usual false-positive
+traps) completely alone:
+
+```console
+$ scrubline < examples/messy.log
+2026-06-24T10:15:01Z level=info msg="server started" port=8080
+2026-06-24T10:15:02Z level=info user=alice request_id=550e8400-e29b-41d4-a716-446655440000
+2026-06-24T10:15:03Z level=debug authorization="[REDACTED:authorization]"
+2026-06-24T10:15:04Z level=warn msg="db connect" dsn=[REDACTED:credential-uri]
+2026-06-24T10:15:05Z level=info commit=9fceb02d0ae598e95dc970b74767f19372d61af8 deploy=ok
+2026-06-24T10:15:06Z level=error msg="email send failed" to=[REDACTED:email]
+2026-06-24T10:15:07Z level=debug session_token=[REDACTED:high-entropy]
+2026-06-24T10:15:08Z level=info pod=nginx-7d8b49557c-x2vfq status=Running
+{"level":"info","msg":"login","password":"[REDACTED:password]","user":"bob"}
+
+$ scrubline --stats < examples/messy.log > /dev/null
+{"lines":9,"redactions":5,"by_kind":{"authorization":1,"credential-uri":1,"email":1,"high-entropy":1,"password":1}}
+```
+
+Run it yourself with [`examples/demo.sh`](examples/demo.sh).
 
 ---
 
@@ -211,6 +238,7 @@ Flags:
 - `--no-entropy` — disable the heuristic entropy detector (named-pattern and
   structured redaction still run).
 - `--rules <FILE>` — load extra named patterns from a TOML file.
+- `--stats` — write a JSON redaction summary to stderr at end of stream.
 - `--hook` — run as a Claude Code hook (see above).
 
 ## Roadmap
@@ -222,7 +250,7 @@ Flags:
 - [x] Conservative entropy detector with a precision/recall benchmark (and `--no-entropy`)
 - [x] Custom-pattern rules file (`--rules`)
 - [x] Claude Code hook mode — strip secrets from tool I/O before they hit an agent's context
-- [ ] `--stats` JSON summary of what was redacted
+- [x] `--stats` JSON summary of what was redacted
 - [ ] `crates.io` release and prebuilt binaries
 
 ## License

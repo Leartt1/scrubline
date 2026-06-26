@@ -7,10 +7,10 @@
 //!     detector's spans, and mask them in one pass (overlaps collapse).
 
 use crate::detector::Detector;
-use crate::json::redact_json_with;
+use crate::json::{redact_json_reported, redact_json_with};
 use crate::logfmt;
 use crate::mask::Mask;
-use crate::span::{Span, redact_spans_with};
+use crate::span::{Span, redact_spans_reported, redact_spans_with};
 
 /// Holds the configured detectors and mask style, and applies the full
 /// redaction pipeline.
@@ -43,6 +43,21 @@ impl Engine {
         redact_spans_with(line, &spans, &self.mask)
     }
 
+    /// Redact a single line and report the kind of every redaction applied (for
+    /// `--stats`). Same pipeline as [`Engine::redact_line`].
+    pub fn redact_line_report(&self, line: &str) -> (String, Vec<String>) {
+        if let Some((structured, mut kinds)) = redact_json_reported(line, &self.mask) {
+            let spans = self.detector_spans(&structured);
+            let (out, more) = redact_spans_reported(&structured, &spans, &self.mask);
+            kinds.extend(more);
+            return (out, kinds);
+        }
+
+        let mut spans = logfmt::sensitive_spans(line);
+        spans.extend(self.detector_spans(line));
+        redact_spans_reported(line, &spans, &self.mask)
+    }
+
     /// Redact a possibly multi-line `text`, preserving `\n` line breaks. Used by
     /// the hook integration, where a single field (a command, tool output) can
     /// span several lines.
@@ -62,6 +77,7 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::detector::LiteralDetector;
+    use crate::patterns::PatternDetector;
 
     fn engine_with(detectors: Vec<Box<dyn Detector>>) -> Engine {
         Engine::new(detectors)
@@ -107,6 +123,16 @@ mod tests {
     fn leaves_clean_lines_unchanged() {
         let e = engine_with(vec![Box::new(LiteralDetector::new("ghp_SECRET", "github-token"))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
+    }
+
+    #[test]
+    fn reports_kinds_from_both_layers() {
+        let e = Engine::new(vec![Box::new(PatternDetector::default())]);
+        // structured key (authorization) + a value detector hit (aws key)
+        let line = "{\"authorization\":\"x\",\"note\":\"AKIAIOSFODNN7EXAMPLE\"}";
+        let (_, kinds) = e.redact_line_report(line);
+        assert!(kinds.contains(&"authorization".to_string()));
+        assert!(kinds.contains(&"aws-access-key".to_string()));
     }
 
     #[test]

@@ -31,13 +31,20 @@ pub fn redact_spans(text: &str, spans: &[Span]) -> String {
 /// span's kind. Merging — rather than dropping later spans — guarantees that no
 /// part of a secret can leak when two detectors flag overlapping regions.
 pub fn redact_spans_with(text: &str, spans: &[Span], mask: &Mask) -> String {
+    redact_spans_reported(text, spans, mask).0
+}
+
+/// Like [`redact_spans_with`], but also returns the kind label of each masked
+/// group (one per redaction emitted), for `--stats` accounting.
+pub fn redact_spans_reported(text: &str, spans: &[Span], mask: &Mask) -> (String, Vec<String>) {
     if spans.is_empty() {
-        return text.to_string();
+        return (text.to_string(), Vec::new());
     }
     let mut ordered: Vec<&Span> = spans.iter().collect();
     ordered.sort_by_key(|s| (s.start, s.end));
 
     let mut out = String::with_capacity(text.len());
+    let mut kinds = Vec::new();
     let mut cursor = 0usize;
     let mut i = 0;
     while i < ordered.len() {
@@ -57,11 +64,12 @@ pub fn redact_spans_with(text: &str, spans: &[Span], mask: &Mask) -> String {
         }
         out.push_str(&text[cursor..group_start]);
         out.push_str(&mask.render(kind));
+        kinds.push(kind.clone());
         cursor = group_end;
         i = j;
     }
     out.push_str(&text[cursor..]);
-    out
+    (out, kinds)
 }
 
 #[cfg(test)]
@@ -124,6 +132,17 @@ mod tests {
         let text = "0123456789 rest";
         let spans = vec![Span::new(0, 5, "a"), Span::new(3, 10, "b")];
         assert_eq!(redact_spans(text, &spans), "[REDACTED:a] rest");
+    }
+
+    #[test]
+    fn reports_one_kind_per_masked_group() {
+        let text = "a=ghp_AAA b=AKIAZZZ";
+        let spans = vec![
+            Span::new(2, 9, "github-token"),
+            Span::new(12, 19, "aws-key"),
+        ];
+        let (_, kinds) = redact_spans_reported(text, &spans, &Mask::Labeled);
+        assert_eq!(kinds, vec!["github-token".to_string(), "aws-key".to_string()]);
     }
 
     #[test]

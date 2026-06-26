@@ -11,6 +11,7 @@ use std::process::ExitCode;
 use clap::Parser;
 use serde_json::json;
 
+use scrubline::allowlist::{self, Allowlist};
 use scrubline::config;
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
@@ -28,8 +29,22 @@ const MASK_WIDTH: usize = 8;
 struct Cli {
     /// Replace each secret with this character (repeated) instead of a
     /// `[REDACTED:<kind>]` label.
-    #[arg(long, value_name = "CHAR")]
+    #[arg(long, value_name = "CHAR", conflicts_with_all = ["hash", "partial"])]
     mask_char: Option<char>,
+
+    /// Replace each secret with `[REDACTED:<kind>:<hash>]`, a stable tag so equal
+    /// secrets correlate across the log without exposing the value.
+    #[arg(long, conflicts_with_all = ["partial"])]
+    hash: bool,
+
+    /// Replace each secret with `****` followed by its last four characters.
+    #[arg(long)]
+    partial: bool,
+
+    /// Never redact values listed in this file (one per line; `re:PATTERN` for a
+    /// regex). The escape hatch for false positives.
+    #[arg(long, value_name = "FILE")]
+    allow: Option<PathBuf>,
 
     /// Disable the heuristic entropy detector (named patterns and structured
     /// redaction still run). Use this if high-entropy values trip false
@@ -57,9 +72,14 @@ struct Cli {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let mask = match cli.mask_char {
-        Some(c) => Mask::Fixed(c.to_string().repeat(MASK_WIDTH)),
-        None => Mask::Labeled,
+    let mask = if cli.hash {
+        Mask::Hashed
+    } else if cli.partial {
+        Mask::Partial
+    } else if let Some(c) = cli.mask_char {
+        Mask::Fixed(c.to_string().repeat(MASK_WIDTH))
+    } else {
+        Mask::Labeled
     };
     let detectors = match build_detectors(&cli) {
         Ok(d) => d,
@@ -68,7 +88,14 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let engine = Engine::with_mask(detectors, mask);
+    let allow = match load_allowlist(&cli) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("scrubline: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let engine = Engine::with_mask(detectors, mask).with_allowlist(allow);
 
     let result = if cli.hook {
         run_hook_mode(&engine)
@@ -116,6 +143,18 @@ fn build_detectors(cli: &Cli) -> Result<Vec<Box<dyn Detector>>, String> {
         detectors.push(Box::new(EntropyDetector::default()));
     }
     Ok(detectors)
+}
+
+/// Load the `--allow` file into an [`Allowlist`], or an empty one if unset.
+fn load_allowlist(cli: &Cli) -> Result<Allowlist, String> {
+    match &cli.allow {
+        Some(path) => {
+            let src = std::fs::read_to_string(path)
+                .map_err(|e| format!("cannot read allow file {}: {e}", path.display()))?;
+            allowlist::parse_allowlist(&src)
+        }
+        None => Ok(Allowlist::default()),
+    }
 }
 
 fn run(engine: &Engine, stats: bool) -> io::Result<()> {

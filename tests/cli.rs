@@ -116,6 +116,31 @@ fn stats_flag_writes_json_summary_to_stderr() {
 }
 
 #[test]
+fn hash_flag_emits_stable_kind_tagged_hash() {
+    let out = run_with(&["--hash"], "token=abc\n");
+    assert!(out.starts_with("token=[REDACTED:token:"), "got: {out}");
+    assert!(out.trim_end().ends_with(']'), "got: {out}");
+}
+
+#[test]
+fn partial_flag_reveals_last_four() {
+    assert_eq!(
+        run_with(&["--partial"], "token=abcdef1234\n"),
+        "token=****1234\n"
+    );
+}
+
+#[test]
+fn allow_file_suppresses_redaction() {
+    let path = format!("{}/allow.txt", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "abcdef1234\n").unwrap();
+    assert_eq!(
+        run_with(&["--allow", &path], "token=abcdef1234\n"),
+        "token=abcdef1234\n"
+    );
+}
+
+#[test]
 fn rules_file_adds_custom_patterns() {
     let path = format!("{}/rules.toml", env!("CARGO_TARGET_TMPDIR"));
     std::fs::write(

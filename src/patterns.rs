@@ -55,6 +55,19 @@ pub fn default_patterns() -> Vec<(String, Regex)> {
         ("slack-token", r"xox[baprs]-[A-Za-z0-9-]{10,}"),
         ("stripe-key", r"[sr]k_(?:live|test)_[A-Za-z0-9]{10,}"),
         ("google-api-key", r"AIza[A-Za-z0-9_-]{35}"),
+        (
+            "openai-key",
+            r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}",
+        ),
+        ("openai-key", r"sk-[A-Za-z0-9]{48}"),
+        ("anthropic-key", r"sk-ant-[A-Za-z0-9_-]{20,}"),
+        ("github-token", r"github_pat_[A-Za-z0-9_]{30,}"),
+        ("twilio-key", r"(?:AC|SK)[a-f0-9]{32}"),
+        (
+            "sendgrid-key",
+            r"SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}",
+        ),
+        ("npm-token", r"npm_[A-Za-z0-9]{36}"),
         ("jwt", r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"),
         ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
         (
@@ -156,6 +169,48 @@ mod tests {
             redact("from alice@example.com today"),
             "from [REDACTED:email] today"
         );
+    }
+
+    #[test]
+    fn masks_openai_project_key() {
+        let key = concat!("sk-", "proj-abcdefghij0123456789KLMNOPqrst");
+        assert_eq!(redact(key), "[REDACTED:openai-key]");
+    }
+
+    #[test]
+    fn masks_openai_legacy_key() {
+        let key = concat!("sk-", "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKL");
+        assert_eq!(redact(key), "[REDACTED:openai-key]");
+    }
+
+    #[test]
+    fn masks_anthropic_key() {
+        let key = concat!("sk-", "ant-api03-abcdefghij0123456789ABCD");
+        assert_eq!(redact(key), "[REDACTED:anthropic-key]");
+    }
+
+    #[test]
+    fn masks_github_fine_grained_pat() {
+        let key = concat!("github_", "pat_0123456789abcdefghijABCDEFGHIJ0123");
+        assert_eq!(redact(key), "[REDACTED:github-token]");
+    }
+
+    #[test]
+    fn masks_twilio_sid() {
+        let key = concat!("AC", "0123456789abcdef0123456789abcdef");
+        assert_eq!(redact(key), "[REDACTED:twilio-key]");
+    }
+
+    #[test]
+    fn masks_sendgrid_key() {
+        let key = concat!("SG.", "abcdefghij0123456789AB.cdefghij0123456789ABCD");
+        assert_eq!(redact(key), "[REDACTED:sendgrid-key]");
+    }
+
+    #[test]
+    fn masks_npm_token() {
+        let key = concat!("npm_", "abcdefghij0123456789abcdefghij012345");
+        assert_eq!(redact(key), "[REDACTED:npm-token]");
     }
 
     #[test]

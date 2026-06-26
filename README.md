@@ -76,8 +76,9 @@ Redaction runs in two layers:
    For a sensitive key, the **entire value subtree** is masked, so nested
    secrets can't leak.
 
-2. **Value detectors (available now).** Named-pattern detectors — AWS keys,
-   GitHub/GitLab/Slack tokens, Stripe keys, Google API keys, JWTs, PEM private
+2. **Value detectors (available now).** Named-pattern detectors — **OpenAI and
+   Anthropic keys**, AWS keys, GitHub (classic + fine-grained), GitLab, and Slack
+   tokens, Stripe, Google, Twilio, SendGrid, and npm keys, JWTs, PEM private
    keys, credentialed URIs, and emails — catch secrets in free-text log
    messages, not just structured fields. A conservative Shannon-entropy detector
    then catches *unknown* high-entropy tokens, while deliberately leaving git
@@ -245,7 +246,7 @@ Flags:
 
 - [x] Streaming line filter, never buffers the stream
 - [x] Structured key-aware redaction for JSON and logfmt
-- [x] Named-pattern detectors (AWS, GitHub, GitLab, Slack, Stripe, Google, JWT, PEM keys, credentialed URIs, emails)
+- [x] Named-pattern detectors (OpenAI, Anthropic, AWS, GitHub, GitLab, Slack, Stripe, Google, Twilio, SendGrid, npm, JWT, PEM keys, credentialed URIs, emails)
 - [x] `--mask-char` and a real `--help`/`--version` CLI
 - [x] Conservative entropy detector with a precision/recall benchmark (and `--no-entropy`)
 - [x] Custom-pattern rules file (`--rules`)

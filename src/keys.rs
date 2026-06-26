@@ -23,10 +23,18 @@ pub const SENSITIVE_KEYS: &[&str] = &[
     "apikey",
     "x_api_key",
     "private_key",
+    "private_token",
     "cookie",
     "set_cookie",
     "session",
     "sessionid",
+    "session_token",
+    "auth_token",
+    "x_auth_token",
+    "api_token",
+    "db_password",
+    "secret_key",
+    "access_key",
     "credentials",
 ];
 
@@ -71,5 +79,21 @@ mod tests {
         assert!(!is_sensitive_key("email"));
         assert!(!is_sensitive_key("user"));
         assert!(!is_sensitive_key("status"));
+    }
+
+    #[test]
+    fn matches_expanded_sensitive_keys() {
+        for key in [
+            "session_token",
+            "auth_token",
+            "db_password",
+            "secret_key",
+            "access_key",
+            "private_token",
+            "x-auth-token",
+            "api_token",
+        ] {
+            assert!(is_sensitive_key(key), "expected '{key}' to be sensitive");
+        }
     }
 }

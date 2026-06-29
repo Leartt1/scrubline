@@ -219,6 +219,12 @@ cargo build --release
 
 > A `crates.io` release and prebuilt binaries are coming.
 
+Shell completions for bash, zsh, fish, elvish, and powershell:
+
+```console
+scrubline completions zsh > ~/.zfunc/_scrubline
+```
+
 ## Usage
 
 `scrubline` is a filter — pipe anything through it:

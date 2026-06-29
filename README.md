@@ -195,13 +195,16 @@ untouched — a hook failure can never block your agent.
 > `UserPromptSubmit` is also supported, but Claude Code doesn't allow a hook to
 > rewrite the prompt, so there scrubline only adds an advisory note.
 
-## Custom patterns
+## Custom patterns and keys
 
-Have an internal token format? Point `--rules` at a TOML file and your patterns
-join the built-ins:
+Have an internal token format or field name? Point `--rules` at a TOML file —
+patterns join the built-in detectors, and `keys` join the structured
+sensitive-key set:
 
 ```toml
 # rules.toml
+keys = ["x-internal-token", "vault_secret"]
+
 [[pattern]]
 kind = "employee-id"
 regex = "EMP[0-9]{6}"
@@ -212,8 +215,22 @@ regex = "INT-[A-Za-z0-9]{20,}"
 ```
 
 ```console
-$ echo 'user EMP123456 acting as service' | scrubline --rules rules.toml
-user [REDACTED:employee-id] acting as service
+$ echo 'user EMP123456 x-internal-token=hush' | scrubline --rules rules.toml
+user [REDACTED:employee-id] x-internal-token=[REDACTED:x-internal-token]
+```
+
+## Configuration
+
+Set defaults in a config file — `$SCRUBLINE_CONFIG`, else
+`~/.config/scrubline/config.toml`. CLI flags always override it.
+
+```toml
+# config.toml
+no_entropy = false
+mask       = "hash"          # labeled | hash | partial
+rules      = "team-rules.toml"
+allow      = "allowlist.txt"
+keys       = ["x-internal-token"]
 ```
 
 ## Install

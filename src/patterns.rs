@@ -6,20 +6,40 @@
 //! log noise like UUIDs and git SHAs. Unstructured high-entropy tokens are the
 //! entropy detector's job (day 3), not these.
 
-use regex::Regex;
+use regex::{Regex, RegexSet};
 
 use crate::detector::Detector;
 use crate::span::Span;
 
 /// Runs a set of named regex patterns over each line. Kinds are owned strings so
 /// user-supplied patterns (from a `--rules` file) can be appended at runtime.
+///
+/// A `RegexSet` over all patterns acts as a single-pass prefilter: one scan
+/// reports *which* patterns (if any) match, so the common secret-free line does
+/// no per-pattern work, and only the patterns that actually hit are re-run to
+/// extract spans. (The regex engine uses literal/Aho-Corasick prefilters
+/// internally, so the gate is fast.)
 pub struct PatternDetector {
-    patterns: Vec<(String, Regex)>,
+    kinds: Vec<String>,
+    regexes: Vec<Regex>,
+    set: RegexSet,
 }
 
 impl PatternDetector {
     pub fn new(patterns: Vec<(String, Regex)>) -> Self {
-        PatternDetector { patterns }
+        let set = RegexSet::new(patterns.iter().map(|(_, re)| re.as_str()))
+            .expect("patterns already compiled individually");
+        let mut kinds = Vec::with_capacity(patterns.len());
+        let mut regexes = Vec::with_capacity(patterns.len());
+        for (kind, re) in patterns {
+            kinds.push(kind);
+            regexes.push(re);
+        }
+        PatternDetector {
+            kinds,
+            regexes,
+            set,
+        }
     }
 }
 
@@ -35,10 +55,14 @@ impl Detector for PatternDetector {
     }
 
     fn find(&self, text: &str) -> Vec<Span> {
+        let matched = self.set.matches(text);
+        if !matched.matched_any() {
+            return Vec::new();
+        }
         let mut spans = Vec::new();
-        for (kind, re) in &self.patterns {
-            for m in re.find_iter(text) {
-                spans.push(Span::new(m.start(), m.end(), kind.clone()));
+        for idx in matched.iter() {
+            for m in self.regexes[idx].find_iter(text) {
+                spans.push(Span::new(m.start(), m.end(), self.kinds[idx].clone()));
             }
         }
         spans

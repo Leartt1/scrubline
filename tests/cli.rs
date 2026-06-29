@@ -162,3 +162,13 @@ fn hook_mode_redacts_pre_tool_use_command() {
     assert!(out.contains("[REDACTED:github-token]"), "got: {out}");
     assert!(!out.contains(token), "token leaked: {out}");
 }
+
+#[test]
+fn completions_subcommand_emits_a_script() {
+    let out = run_with(&["completions", "bash"], "");
+    assert!(
+        out.contains("scrubline"),
+        "expected a completion script, got: {out}"
+    );
+    assert!(!out.is_empty());
+}

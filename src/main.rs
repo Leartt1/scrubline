@@ -8,7 +8,8 @@ use std::io::{self, BufRead, BufWriter, Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use serde_json::json;
 
 use scrubline::allowlist::{self, Allowlist};
@@ -27,6 +28,9 @@ const MASK_WIDTH: usize = 8;
 #[derive(Parser)]
 #[command(name = "scrubline", version, about, long_about = None)]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Replace each secret with this character (repeated) instead of a
     /// `[REDACTED:<kind>]` label.
     #[arg(long, value_name = "CHAR", conflicts_with_all = ["hash", "partial"])]
@@ -70,8 +74,24 @@ struct Cli {
     stats: bool,
 }
 
+#[derive(Subcommand)]
+enum Command {
+    /// Print a shell completion script (bash, zsh, fish, elvish, powershell).
+    Completions {
+        /// Shell to generate completions for.
+        shell: Shell,
+    },
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    if let Some(Command::Completions { shell }) = cli.command {
+        let mut cmd = Cli::command();
+        clap_complete::generate(shell, &mut cmd, "scrubline", &mut io::stdout());
+        return ExitCode::SUCCESS;
+    }
+
     let mask = if cli.hash {
         Mask::Hashed
     } else if cli.partial {

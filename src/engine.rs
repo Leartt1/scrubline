@@ -9,16 +9,18 @@
 use crate::allowlist::Allowlist;
 use crate::detector::Detector;
 use crate::json::{redact_json_reported, redact_json_with};
+use crate::keys::KeySet;
 use crate::logfmt;
 use crate::mask::Mask;
 use crate::span::{Span, redact_spans_reported, redact_spans_with};
 
-/// Holds the configured detectors, mask style, and allowlist, and applies the
-/// full redaction pipeline.
+/// Holds the configured detectors, mask style, allowlist, and sensitive-key set,
+/// and applies the full redaction pipeline.
 pub struct Engine {
     detectors: Vec<Box<dyn Detector>>,
     mask: Mask,
     allow: Allowlist,
+    keys: KeySet,
 }
 
 impl Engine {
@@ -33,6 +35,7 @@ impl Engine {
             detectors,
             mask,
             allow: Allowlist::default(),
+            keys: KeySet::default(),
         }
     }
 
@@ -42,16 +45,22 @@ impl Engine {
         self
     }
 
+    /// Set the sensitive-key set (built-ins plus user-supplied extras).
+    pub fn with_keys(mut self, keys: KeySet) -> Self {
+        self.keys = keys;
+        self
+    }
+
     /// Redact a single line, returning the cleaned text (no trailing newline
     /// handling — the caller owns line framing).
     pub fn redact_line(&self, line: &str) -> String {
-        if let Some(structured) = redact_json_with(line, &self.mask, &self.allow) {
+        if let Some(structured) = redact_json_with(line, &self.mask, &self.allow, &self.keys) {
             let mut spans = self.detector_spans(&structured);
             self.retain_allowed(&structured, &mut spans);
             return redact_spans_with(&structured, &spans, &self.mask);
         }
 
-        let mut spans = logfmt::sensitive_spans(line);
+        let mut spans = logfmt::sensitive_spans(line, &self.keys);
         spans.extend(self.detector_spans(line));
         self.retain_allowed(line, &mut spans);
         redact_spans_with(line, &spans, &self.mask)
@@ -60,7 +69,9 @@ impl Engine {
     /// Redact a single line and report the kind of every redaction applied (for
     /// `--stats`). Same pipeline as [`Engine::redact_line`].
     pub fn redact_line_report(&self, line: &str) -> (String, Vec<String>) {
-        if let Some((structured, mut kinds)) = redact_json_reported(line, &self.mask, &self.allow) {
+        if let Some((structured, mut kinds)) =
+            redact_json_reported(line, &self.mask, &self.allow, &self.keys)
+        {
             let mut spans = self.detector_spans(&structured);
             self.retain_allowed(&structured, &mut spans);
             let (out, more) = redact_spans_reported(&structured, &spans, &self.mask);
@@ -68,7 +79,7 @@ impl Engine {
             return (out, kinds);
         }
 
-        let mut spans = logfmt::sensitive_spans(line);
+        let mut spans = logfmt::sensitive_spans(line, &self.keys);
         spans.extend(self.detector_spans(line));
         self.retain_allowed(line, &mut spans);
         redact_spans_reported(line, &spans, &self.mask)
@@ -101,6 +112,7 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::detector::LiteralDetector;
+    use crate::keys::KeySet;
     use crate::patterns::PatternDetector;
 
     fn engine_with(detectors: Vec<Box<dyn Detector>>) -> Engine {
@@ -165,6 +177,19 @@ mod tests {
             "github-token",
         ))]);
         assert_eq!(e.redact_line("all good here"), "all good here");
+    }
+
+    #[test]
+    fn custom_keys_are_redacted_in_both_layers() {
+        let e = Engine::new(vec![]).with_keys(KeySet::with_extra(["x-internal".to_string()]));
+        assert_eq!(
+            e.redact_line("x-internal=topsecret user=bob"),
+            "x-internal=[REDACTED:x-internal] user=bob"
+        );
+        assert_eq!(
+            e.redact_line(r#"{"x-internal":"v"}"#),
+            r#"{"x-internal":"[REDACTED:x-internal]"}"#
+        );
     }
 
     #[test]

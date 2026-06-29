@@ -4,11 +4,11 @@
 //! sensitive, return a [`Span`] covering the value — the inner content for a
 //! quoted value (so the quotes survive), or the whole token when unquoted.
 
-use crate::keys::is_sensitive_key;
+use crate::keys::KeySet;
 use crate::span::Span;
 
 /// Return value spans for every sensitive key found in a logfmt `line`.
-pub fn sensitive_spans(line: &str) -> Vec<Span> {
+pub fn sensitive_spans(line: &str, keys: &KeySet) -> Vec<Span> {
     let bytes = line.as_bytes();
     let len = bytes.len();
     let mut spans = Vec::new();
@@ -58,7 +58,7 @@ pub fn sensitive_spans(line: &str) -> Vec<Span> {
             (start, i)
         };
 
-        if val_end > val_start && is_sensitive_key(key) {
+        if val_end > val_start && keys.is_sensitive(key) {
             spans.push(Span::new(val_start, val_end, key.to_ascii_lowercase()));
         }
     }
@@ -72,7 +72,7 @@ mod tests {
     use crate::span::redact_spans;
 
     fn redact(line: &str) -> String {
-        redact_spans(line, &sensitive_spans(line))
+        redact_spans(line, &sensitive_spans(line, &KeySet::default()))
     }
 
     #[test]

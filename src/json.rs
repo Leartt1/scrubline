@@ -6,22 +6,27 @@
 //! order so the line stays recognizable.
 
 use crate::allowlist::Allowlist;
-use crate::keys::is_sensitive_key;
+use crate::keys::KeySet;
 use crate::mask::Mask;
 use serde_json::Value;
 
 /// If `line` is a JSON object or array, return it with sensitive values masked
 /// with a `[REDACTED:<key>]` label. `None` for non-JSON lines.
 pub fn redact_json(line: &str) -> Option<String> {
-    redact_json_with(line, &Mask::Labeled, &Allowlist::default())
+    redact_json_with(line, &Mask::Labeled, &Allowlist::default(), &KeySet::default())
 }
 
 /// If `line` is a JSON object or array, return it with every sensitive value
 /// masked using `mask` (skipping allowlisted values). Returns `None` for
 /// anything that isn't a JSON object/array so plain text and logfmt fall through
 /// to other layers untouched.
-pub fn redact_json_with(line: &str, mask: &Mask, allow: &Allowlist) -> Option<String> {
-    redact_json_reported(line, mask, allow).map(|(out, _)| out)
+pub fn redact_json_with(
+    line: &str,
+    mask: &Mask,
+    allow: &Allowlist,
+    keys: &KeySet,
+) -> Option<String> {
+    redact_json_reported(line, mask, allow, keys).map(|(out, _)| out)
 }
 
 /// Like [`redact_json_with`], but also returns the kind (lowercased key) of each
@@ -30,6 +35,7 @@ pub fn redact_json_reported(
     line: &str,
     mask: &Mask,
     allow: &Allowlist,
+    keys: &KeySet,
 ) -> Option<(String, Vec<String>)> {
     let trimmed = line.trim();
     // Only objects/arrays — never mask a bare scalar line like `42` or `true`.
@@ -38,18 +44,24 @@ pub fn redact_json_reported(
     }
     let mut value: Value = serde_json::from_str(trimmed).ok()?;
     let mut kinds = Vec::new();
-    redact_value(&mut value, mask, allow, &mut kinds);
+    redact_value(&mut value, mask, allow, keys, &mut kinds);
     let out = serde_json::to_string(&value).ok()?;
     Some((out, kinds))
 }
 
 /// Walk `value`; when a key is sensitive, replace its entire value subtree with
 /// a marker so nested secrets can't leak. Records each masked key in `kinds`.
-fn redact_value(value: &mut Value, mask: &Mask, allow: &Allowlist, kinds: &mut Vec<String>) {
+fn redact_value(
+    value: &mut Value,
+    mask: &Mask,
+    allow: &Allowlist,
+    keys: &KeySet,
+    kinds: &mut Vec<String>,
+) {
     match value {
         Value::Object(map) => {
             for (key, child) in map.iter_mut() {
-                if is_sensitive_key(key) {
+                if keys.is_sensitive(key) {
                     let value_str = match &*child {
                         Value::String(s) => s.clone(),
                         other => other.to_string(),
@@ -61,13 +73,13 @@ fn redact_value(value: &mut Value, mask: &Mask, allow: &Allowlist, kinds: &mut V
                     *child = Value::String(mask.render(&kind, &value_str));
                     kinds.push(kind);
                 } else {
-                    redact_value(child, mask, allow, kinds);
+                    redact_value(child, mask, allow, keys, kinds);
                 }
             }
         }
         Value::Array(items) => {
             for item in items.iter_mut() {
-                redact_value(item, mask, allow, kinds);
+                redact_value(item, mask, allow, keys, kinds);
             }
         }
         _ => {}

@@ -38,7 +38,7 @@ pub const SENSITIVE_KEYS: &[&str] = &[
     "credentials",
 ];
 
-/// True if `key` names a sensitive field. Matching ignores surrounding
+/// True if `key` names a built-in sensitive field. Matching ignores surrounding
 /// whitespace and case, and treats `-` and `_` as the same character, so
 /// `api-key`, `api_key`, and `API_KEY` all match.
 pub fn is_sensitive_key(key: &str) -> bool {
@@ -48,6 +48,28 @@ pub fn is_sensitive_key(key: &str) -> bool {
 
 fn normalize(key: &str) -> String {
     key.trim().to_ascii_lowercase().replace('-', "_")
+}
+
+/// The set of sensitive field names: the built-ins plus any user-supplied extras
+/// (from a `--rules` file or config). Used by the structured (JSON/logfmt)
+/// redaction layers.
+#[derive(Default)]
+pub struct KeySet {
+    extra: std::collections::HashSet<String>,
+}
+
+impl KeySet {
+    /// Build from extra key names (normalized the same way as the built-ins).
+    pub fn with_extra(keys: impl IntoIterator<Item = String>) -> Self {
+        KeySet {
+            extra: keys.into_iter().map(|k| normalize(&k)).collect(),
+        }
+    }
+
+    /// True if `key` is sensitive — a built-in or a user-supplied extra.
+    pub fn is_sensitive(&self, key: &str) -> bool {
+        is_sensitive_key(key) || self.extra.contains(&normalize(key))
+    }
 }
 
 #[cfg(test)]
@@ -79,6 +101,22 @@ mod tests {
         assert!(!is_sensitive_key("email"));
         assert!(!is_sensitive_key("user"));
         assert!(!is_sensitive_key("status"));
+    }
+
+    #[test]
+    fn keyset_matches_builtins_and_extras() {
+        let ks = KeySet::with_extra(["x-internal-token".to_string(), "vault_secret".to_string()]);
+        assert!(ks.is_sensitive("password")); // built-in
+        assert!(ks.is_sensitive("X-Internal-Token")); // extra, case/hyphen-insensitive
+        assert!(ks.is_sensitive("vault-secret"));
+        assert!(!ks.is_sensitive("user"));
+    }
+
+    #[test]
+    fn default_keyset_has_only_builtins() {
+        let ks = KeySet::default();
+        assert!(ks.is_sensitive("token"));
+        assert!(!ks.is_sensitive("x-internal-token"));
     }
 
     #[test]

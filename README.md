@@ -138,6 +138,22 @@ CI instead of shipping. The entropy detector only flags long tokens that mix
 upper/lower/digits and clear an entropy floor, which is what keeps SHAs and pod
 names safe.
 
+## Performance
+
+It's a streaming, single-pass filter — it never buffers the whole stream, so
+memory is flat on an infinite tail. The named-pattern detectors are gated by a
+single `RegexSet` scan, so a secret-free line (the common case) does no
+per-pattern work. On a dev laptop that's **~95 MiB/s (over a million lines per
+second)** through the full default stack:
+
+```console
+$ cargo run --release --example bench
+scrubline throughput (default detectors)
+  lines:      500000
+  input:      42.3 MiB
+  throughput: 97 MiB/s  (1142K lines/s)
+```
+
 ## Use it with Claude Code
 
 Coding agents read your logs, your `.env`, your command output — and whatever

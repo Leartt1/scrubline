@@ -5,6 +5,7 @@
 //! the whole stream.
 
 pub mod allowlist;
+pub mod appconfig;
 pub mod config;
 pub mod detector;
 pub mod engine;

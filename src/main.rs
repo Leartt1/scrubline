@@ -13,10 +13,12 @@ use clap_complete::Shell;
 use serde_json::json;
 
 use scrubline::allowlist::{self, Allowlist};
-use scrubline::config;
+use scrubline::appconfig::{self, AppConfig};
+use scrubline::config::{self, RulesFile};
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
 use scrubline::entropy::EntropyDetector;
+use scrubline::keys::KeySet;
 use scrubline::mask::Mask;
 use scrubline::patterns::{self, PatternDetector};
 
@@ -92,30 +94,13 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let mask = if cli.hash {
-        Mask::Hashed
-    } else if cli.partial {
-        Mask::Partial
-    } else if let Some(c) = cli.mask_char {
-        Mask::Fixed(c.to_string().repeat(MASK_WIDTH))
-    } else {
-        Mask::Labeled
-    };
-    let detectors = match build_detectors(&cli) {
-        Ok(d) => d,
+    let engine = match setup_engine(&cli) {
+        Ok(e) => e,
         Err(e) => {
             eprintln!("scrubline: {e}");
             return ExitCode::FAILURE;
         }
     };
-    let allow = match load_allowlist(&cli) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("scrubline: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let engine = Engine::with_mask(detectors, mask).with_allowlist(allow);
 
     let result = if cli.hook {
         run_hook_mode(&engine)
@@ -146,35 +131,103 @@ fn run_hook_mode(engine: &Engine) -> io::Result<()> {
     out.flush()
 }
 
-/// Build the value detectors: built-in named patterns plus any from `--rules`,
-/// then the entropy heuristic unless disabled. The structured (JSON/logfmt)
-/// layer runs regardless of this list. Returns an error if the rules file can't
-/// be read or parsed.
-fn build_detectors(cli: &Cli) -> Result<Vec<Box<dyn Detector>>, String> {
-    let mut patterns = patterns::default_patterns();
-    if let Some(path) = &cli.rules {
-        let src = std::fs::read_to_string(path)
-            .map_err(|e| format!("cannot read rules file {}: {e}", path.display()))?;
-        patterns.extend(config::parse_rules(&src)?);
-    }
+/// Resolve config + CLI into a ready engine. CLI flags override config-file
+/// defaults; rules-file and config keys merge.
+fn setup_engine(cli: &Cli) -> Result<Engine, String> {
+    let app = load_config()?;
 
+    let rules_path = cli.rules.clone().or_else(|| app.rules.clone());
+    let allow_path = cli.allow.clone().or_else(|| app.allow.clone());
+    let no_entropy = cli.no_entropy || app.no_entropy.unwrap_or(false);
+    let mask = resolve_mask(cli, &app)?;
+
+    let rules = load_rules(&rules_path)?;
+    let allow = load_allowlist(&allow_path)?;
+
+    let mut patterns = patterns::default_patterns();
+    patterns.extend(rules.patterns);
     let mut detectors: Vec<Box<dyn Detector>> = vec![Box::new(PatternDetector::new(patterns))];
-    if !cli.no_entropy {
+    if !no_entropy {
         detectors.push(Box::new(EntropyDetector::default()));
     }
-    Ok(detectors)
+
+    let mut keys = app.keys;
+    keys.extend(rules.keys);
+
+    Ok(Engine::with_mask(detectors, mask)
+        .with_allowlist(allow)
+        .with_keys(KeySet::with_extra(keys)))
 }
 
-/// Load the `--allow` file into an [`Allowlist`], or an empty one if unset.
-fn load_allowlist(cli: &Cli) -> Result<Allowlist, String> {
-    match &cli.allow {
-        Some(path) => {
-            let src = std::fs::read_to_string(path)
-                .map_err(|e| format!("cannot read allow file {}: {e}", path.display()))?;
+/// Choose the mask style: CLI flags win, then the config's `mask`, then labeled.
+fn resolve_mask(cli: &Cli, app: &AppConfig) -> Result<Mask, String> {
+    if cli.hash {
+        return Ok(Mask::Hashed);
+    }
+    if cli.partial {
+        return Ok(Mask::Partial);
+    }
+    if let Some(c) = cli.mask_char {
+        return Ok(Mask::Fixed(c.to_string().repeat(MASK_WIDTH)));
+    }
+    match app.mask.as_deref() {
+        None | Some("labeled") => Ok(Mask::Labeled),
+        Some("hash") => Ok(Mask::Hashed),
+        Some("partial") => Ok(Mask::Partial),
+        Some(other) => Err(format!(
+            "invalid mask {other:?} in config (expected labeled, hash, or partial)"
+        )),
+    }
+}
+
+/// Load the rules file (extra patterns + keys), or an empty one if unset.
+fn load_rules(path: &Option<PathBuf>) -> Result<RulesFile, String> {
+    match path {
+        Some(p) => {
+            let src = std::fs::read_to_string(p)
+                .map_err(|e| format!("cannot read rules file {}: {e}", p.display()))?;
+            config::parse_rules(&src)
+        }
+        None => Ok(RulesFile::default()),
+    }
+}
+
+/// Load an allowlist file, or an empty allowlist if unset.
+fn load_allowlist(path: &Option<PathBuf>) -> Result<Allowlist, String> {
+    match path {
+        Some(p) => {
+            let src = std::fs::read_to_string(p)
+                .map_err(|e| format!("cannot read allow file {}: {e}", p.display()))?;
             allowlist::parse_allowlist(&src)
         }
         None => Ok(Allowlist::default()),
     }
+}
+
+/// Load the config file from `$SCRUBLINE_CONFIG` or the default location.
+fn load_config() -> Result<AppConfig, String> {
+    match config_path() {
+        Some(p) => {
+            let src = std::fs::read_to_string(&p)
+                .map_err(|e| format!("cannot read config {}: {e}", p.display()))?;
+            appconfig::parse_config(&src)
+        }
+        None => Ok(AppConfig::default()),
+    }
+}
+
+/// The config-file path: `$SCRUBLINE_CONFIG` (used even if missing, so a typo is
+/// reported), else the XDG/`~/.config` default (used only if it exists).
+fn config_path() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SCRUBLINE_CONFIG") {
+        return Some(PathBuf::from(p));
+    }
+    let base = match std::env::var_os("XDG_CONFIG_HOME") {
+        Some(x) => PathBuf::from(x),
+        None => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+    };
+    let path = base.join("scrubline/config.toml");
+    path.exists().then_some(path)
 }
 
 fn run(engine: &Engine, stats: bool) -> io::Result<()> {

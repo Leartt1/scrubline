@@ -24,6 +24,26 @@ fn run_with(args: &[&str], input: &str) -> String {
     String::from_utf8(output.stdout).expect("utf8 stdout")
 }
 
+fn run_env(envs: &[(&str, &str)], args: &[&str], input: &str) -> String {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_scrubline"));
+    cmd.args(args);
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn scrubline");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(input.as_bytes())
+        .expect("write stdin");
+    String::from_utf8(child.wait_with_output().expect("wait").stdout).expect("utf8")
+}
+
 #[test]
 fn redacts_json_secret_from_stdin() {
     assert_eq!(
@@ -171,4 +191,44 @@ fn completions_subcommand_emits_a_script() {
         "expected a completion script, got: {out}"
     );
     assert!(!out.is_empty());
+}
+
+#[test]
+fn rules_file_adds_custom_keys() {
+    let path = format!("{}/keys.toml", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "keys = [\"x-internal-token\"]\n").unwrap();
+    assert_eq!(
+        run_with(&["--rules", &path], "x-internal-token=hush user=bob\n"),
+        "x-internal-token=[REDACTED:x-internal-token] user=bob\n"
+    );
+}
+
+#[test]
+fn config_file_sets_defaults_and_cli_overrides() {
+    let path = format!("{}/config.toml", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "no_entropy = true\nmask = \"hash\"\n").unwrap();
+    let secret = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
+
+    // Config turns entropy off and selects the hash mask.
+    let out = run_env(
+        &[("SCRUBLINE_CONFIG", &path)],
+        &[],
+        &format!("tok {secret} password=secret\n"),
+    );
+    assert!(
+        out.contains(secret),
+        "entropy should be off via config: {out}"
+    );
+    assert!(
+        out.contains("[REDACTED:password:"),
+        "hash mask via config: {out}"
+    );
+
+    // A CLI mask flag overrides the config's mask.
+    let out2 = run_env(
+        &[("SCRUBLINE_CONFIG", &path)],
+        &["--mask-char", "#"],
+        "password=secret\n",
+    );
+    assert_eq!(out2, "password=########\n");
 }

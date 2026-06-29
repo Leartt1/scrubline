@@ -13,7 +13,12 @@ use serde_json::Value;
 /// If `line` is a JSON object or array, return it with sensitive values masked
 /// with a `[REDACTED:<key>]` label. `None` for non-JSON lines.
 pub fn redact_json(line: &str) -> Option<String> {
-    redact_json_with(line, &Mask::Labeled, &Allowlist::default(), &KeySet::default())
+    redact_json_with(
+        line,
+        &Mask::Labeled,
+        &Allowlist::default(),
+        &KeySet::default(),
+    )
 }
 
 /// If `line` is a JSON object or array, return it with every sensitive value

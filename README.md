@@ -284,9 +284,17 @@ Flags:
   structured redaction still run).
 - `--rules <FILE>` — load extra named patterns from a TOML file.
 - `--stats` — write a JSON redaction summary to stderr at end of stream.
+- `--fail-on-match` — exit with status 2 if any secret was found (cleaned stream
+  still written). Use it to fail a build that leaks secrets.
 - `--hook` — run as a Claude Code hook (see above).
 
 `--mask-char`, `--hash`, and `--partial` are mutually exclusive.
+
+Gate a CI step on leaks:
+
+```console
+$ deploy.sh 2>&1 | scrubline --fail-on-match || { echo "secrets in output!"; exit 1; }
+```
 
 ```console
 $ printf 'a=ghp_DEADBEEFdeadbeef0123456789ABCDEFwxyz b=ghp_DEADBEEFdeadbeef0123456789ABCDEFwxyz\n' | scrubline --hash

@@ -240,6 +240,38 @@ fn rules_file_adds_custom_keys() {
 }
 
 #[test]
+fn file_arg_redacts_to_stdout_without_changing_the_file() {
+    let path = format!("{}/input.log", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "token=abc\nclean line\n").unwrap();
+    assert_eq!(
+        run_with(&[&path], ""),
+        "token=[REDACTED:token]\nclean line\n"
+    );
+    // the source file is untouched without --in-place
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "token=abc\nclean line\n"
+    );
+}
+
+#[test]
+fn in_place_rewrites_the_file() {
+    let path = format!("{}/inplace.log", env!("CARGO_TARGET_TMPDIR"));
+    std::fs::write(&path, "password=secret\nok\n").unwrap();
+    assert_eq!(run_with(&["--in-place", &path], ""), "");
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "password=[REDACTED:password]\nok\n"
+    );
+}
+
+#[test]
+fn in_place_without_files_is_an_error() {
+    let (_out, code) = run_status(&["--in-place"], "");
+    assert_ne!(code, 0);
+}
+
+#[test]
 fn config_file_sets_defaults_and_cli_overrides() {
     let path = format!("{}/config.toml", env!("CARGO_TARGET_TMPDIR"));
     std::fs::write(&path, "no_entropy = true\nmask = \"hash\"\n").unwrap();

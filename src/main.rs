@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{self, BufRead, BufWriter, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, Subcommand};
@@ -79,6 +79,16 @@ struct Cli {
     /// written). Lets a pipeline fail a build that leaks secrets.
     #[arg(long)]
     fail_on_match: bool,
+
+    /// Files to redact. With none, scrubline reads stdin. Cleaned output goes to
+    /// stdout unless `--in-place` is given.
+    #[arg(value_name = "FILE")]
+    files: Vec<PathBuf>,
+
+    /// Rewrite each input file in place with its cleaned contents (requires
+    /// FILE arguments).
+    #[arg(long)]
+    in_place: bool,
 }
 
 #[derive(Subcommand)]
@@ -107,8 +117,21 @@ fn main() -> ExitCode {
         }
     };
 
+    if cli.in_place && cli.files.is_empty() {
+        eprintln!("scrubline: --in-place requires FILE arguments");
+        return ExitCode::FAILURE;
+    }
+
     let result = if cli.hook {
         run_hook_mode(&engine).map(|()| false)
+    } else if !cli.files.is_empty() {
+        run_files(
+            &engine,
+            &cli.files,
+            cli.in_place,
+            cli.stats,
+            cli.fail_on_match,
+        )
     } else {
         run(&engine, cli.stats, cli.fail_on_match)
     };
@@ -282,6 +305,69 @@ fn run(engine: &Engine, stats: bool, fail_on_match: bool) -> io::Result<bool> {
         eprintln!("{summary}");
     }
     Ok(redactions > 0)
+}
+
+/// Redact one or more files. Without `in_place`, cleaned contents are
+/// concatenated to stdout; with it, each file is rewritten atomically. Returns
+/// whether any secret was found.
+fn run_files(
+    engine: &Engine,
+    files: &[PathBuf],
+    in_place: bool,
+    stats: bool,
+    fail_on_match: bool,
+) -> io::Result<bool> {
+    let track = stats || fail_on_match;
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut lines: u64 = 0;
+    let mut redactions: u64 = 0;
+
+    let stdout = io::stdout();
+    let mut out = BufWriter::new(stdout.lock());
+
+    for path in files {
+        let input = std::fs::read_to_string(path)
+            .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", path.display())))?;
+        let mut cleaned = String::with_capacity(input.len());
+        for chunk in input.split_inclusive('\n') {
+            let (content, terminator) = split_terminator(chunk);
+            if track {
+                let (c, kinds) = engine.redact_line_report(content);
+                lines += 1;
+                redactions += kinds.len() as u64;
+                for kind in kinds {
+                    *counts.entry(kind).or_default() += 1;
+                }
+                cleaned.push_str(&c);
+            } else {
+                cleaned.push_str(&engine.redact_line(content));
+            }
+            cleaned.push_str(terminator);
+        }
+
+        if in_place {
+            write_atomic(path, &cleaned)?;
+        } else {
+            out.write_all(cleaned.as_bytes())?;
+        }
+    }
+    out.flush()?;
+
+    if stats {
+        let by_kind: serde_json::Map<String, serde_json::Value> =
+            counts.into_iter().map(|(k, v)| (k, json!(v))).collect();
+        let summary = json!({ "lines": lines, "redactions": redactions, "by_kind": by_kind });
+        eprintln!("{summary}");
+    }
+    Ok(redactions > 0)
+}
+
+/// Write `contents` to `path` via a temp file in the same directory + rename, so
+/// a partial write never truncates the original.
+fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
+    let tmp = path.with_extension("scrubline-tmp");
+    std::fs::write(&tmp, contents)?;
+    std::fs::rename(&tmp, path)
 }
 
 /// Split a read line into its content and its line terminator (`\n`, `\r\n`, or

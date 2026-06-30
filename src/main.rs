@@ -74,6 +74,11 @@ struct Cli {
     /// is unaffected.
     #[arg(long)]
     stats: bool,
+
+    /// Exit with status 2 if any secret was found (the cleaned stream is still
+    /// written). Lets a pipeline fail a build that leaks secrets.
+    #[arg(long)]
+    fail_on_match: bool,
 }
 
 #[derive(Subcommand)]
@@ -103,12 +108,14 @@ fn main() -> ExitCode {
     };
 
     let result = if cli.hook {
-        run_hook_mode(&engine)
+        run_hook_mode(&engine).map(|()| false)
     } else {
-        run(&engine, cli.stats)
+        run(&engine, cli.stats, cli.fail_on_match)
     };
     match result {
-        Ok(()) => ExitCode::SUCCESS,
+        // With --fail-on-match, finding a secret is a non-zero exit (CI gate).
+        Ok(found) if cli.fail_on_match && found => ExitCode::from(2),
+        Ok(_) => ExitCode::SUCCESS,
         // A closed downstream pipe (e.g. `... | head`) is a normal way to stop.
         Err(e) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         Err(e) => {
@@ -230,7 +237,10 @@ fn config_path() -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
-fn run(engine: &Engine, stats: bool) -> io::Result<()> {
+/// Run the streaming filter. Returns whether any secret was redacted (for
+/// `--fail-on-match`). When neither `stats` nor `track` is needed, uses the
+/// allocation-free fast path.
+fn run(engine: &Engine, stats: bool, fail_on_match: bool) -> io::Result<bool> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let stdout = io::stdout();
@@ -239,6 +249,7 @@ fn run(engine: &Engine, stats: bool) -> io::Result<()> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut lines: u64 = 0;
     let mut redactions: u64 = 0;
+    let track = stats || fail_on_match;
 
     let mut line = String::new();
     loop {
@@ -247,7 +258,7 @@ fn run(engine: &Engine, stats: bool) -> io::Result<()> {
             break; // EOF
         }
         let (content, terminator) = split_terminator(&line);
-        let cleaned = if stats {
+        let cleaned = if track {
             let (cleaned, kinds) = engine.redact_line_report(content);
             lines += 1;
             redactions += kinds.len() as u64;
@@ -270,7 +281,7 @@ fn run(engine: &Engine, stats: bool) -> io::Result<()> {
         let summary = json!({ "lines": lines, "redactions": redactions, "by_kind": by_kind });
         eprintln!("{summary}");
     }
-    Ok(())
+    Ok(redactions > 0)
 }
 
 /// Split a read line into its content and its line terminator (`\n`, `\r\n`, or

@@ -183,6 +183,42 @@ fn hook_mode_redacts_pre_tool_use_command() {
     assert!(!out.contains(token), "token leaked: {out}");
 }
 
+fn run_status(args: &[&str], input: &str) -> (String, i32) {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_scrubline"))
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn scrubline");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(input.as_bytes())
+        .expect("write stdin");
+    let out = child.wait_with_output().expect("wait");
+    (
+        String::from_utf8(out.stdout).expect("utf8"),
+        out.status.code().unwrap_or(-1),
+    )
+}
+
+#[test]
+fn fail_on_match_exits_2_when_secret_found() {
+    let (stdout, code) = run_status(&["--fail-on-match"], "token=abc\nclean\n");
+    // The cleaned stream is still produced...
+    assert_eq!(stdout, "token=[REDACTED:token]\nclean\n");
+    // ...but the exit code signals a leak.
+    assert_eq!(code, 2);
+}
+
+#[test]
+fn fail_on_match_exits_0_when_clean() {
+    let (stdout, code) = run_status(&["--fail-on-match"], "all clean here\nnothing secret\n");
+    assert_eq!(stdout, "all clean here\nnothing secret\n");
+    assert_eq!(code, 0);
+}
+
 #[test]
 fn completions_subcommand_emits_a_script() {
     let out = run_with(&["completions", "bash"], "");

@@ -268,6 +268,14 @@ tail -f /var/log/app.log | scrubline
 docker logs -f web | scrubline | tee cleaned.log
 ```
 
+Or hand it files directly — cleaned output goes to stdout, or `--in-place`
+rewrites each file:
+
+```console
+scrubline app.log                 # cleaned copy to stdout
+scrubline --in-place *.log        # scrub the files in place
+```
+
 Line terminators (LF / CRLF) are preserved, and a closed downstream pipe
 (`… | head`) exits cleanly.
 
@@ -286,6 +294,7 @@ Flags:
 - `--stats` — write a JSON redaction summary to stderr at end of stream.
 - `--fail-on-match` — exit with status 2 if any secret was found (cleaned stream
   still written). Use it to fail a build that leaks secrets.
+- `--in-place` — with FILE arguments, rewrite each file with its cleaned contents.
 - `--hook` — run as a Claude Code hook (see above).
 
 `--mask-char`, `--hash`, and `--partial` are mutually exclusive.

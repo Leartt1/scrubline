@@ -77,10 +77,12 @@ Redaction runs in two layers:
    secrets can't leak.
 
 2. **Value detectors (available now).** Named-pattern detectors — **OpenAI and
-   Anthropic keys**, AWS keys, GitHub (classic + fine-grained), GitLab, and Slack
-   tokens, Stripe, Google, Twilio, SendGrid, and npm keys, JWTs, PEM private
-   keys, credentialed URIs, and emails — catch secrets in free-text log
-   messages, not just structured fields. A conservative Shannon-entropy detector
+   Anthropic keys**, AWS, GitHub (classic + fine-grained), GitLab, Slack, Stripe,
+   Google, Twilio, SendGrid, npm, DigitalOcean, Fly.io, Databricks, Doppler,
+   Shopify, Linear, New Relic, and PyPI tokens, JWTs, PEM private keys,
+   credentialed URIs, and emails — catch secrets in free-text log messages, not
+   just structured fields (run `scrubline list-detectors` for the full list). A
+   conservative Shannon-entropy detector
    then catches *unknown* high-entropy tokens, while deliberately leaving git
    SHAs, UUIDs, content hashes, and Kubernetes pod names alone. Turn it off with
    `--no-entropy`.
@@ -228,10 +230,13 @@ Set defaults in a config file — `$SCRUBLINE_CONFIG`, else
 # config.toml
 no_entropy = false
 mask       = "hash"          # labeled | hash | partial
+mask_char  = "*"             # or a fixed mask character
 rules      = "team-rules.toml"
 allow      = "allowlist.txt"
 keys       = ["x-internal-token"]
 ```
+
+List everything scrubline detects with `scrubline list-detectors`.
 
 ## Install
 

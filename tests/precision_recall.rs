@@ -34,6 +34,11 @@ fn positives() -> Vec<(String, String)> {
     let openai = concat!("sk-", "proj-abcdefghij0123456789KLMNOPqrst");
     let anthropic = concat!("sk-", "ant-api03-abcdefghij0123456789ABCD");
     let npm = concat!("npm_", "abcdefghij0123456789abcdefghij012345");
+    let digitalocean = concat!(
+        "dop_v1_",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    );
+    let shopify = concat!("shp", "at_0123456789abcdef0123456789abcdef");
     let ent1 = "Xy9aB7cD3eF1gH5jK2mN4pQ6rS8tU0vW";
     let ent2 = "Q8vN2mZ5kP7wL4xR9tB3hC6yF1dG0sJ";
     let ent3 = "8f3K-mP9xQ2w-Lr7Tn4Vb1Zc6Hy0Ms5dA";
@@ -71,6 +76,11 @@ fn positives() -> Vec<(String, String)> {
     pos(format!("openai call failed key={openai}"), openai);
     pos(format!("anthropic client init {anthropic}"), anthropic);
     pos(format!("npm publish auth {npm}"), npm);
+    pos(
+        format!("provisioning droplet with {digitalocean}"),
+        digitalocean,
+    );
+    pos(format!("shopify admin api key={shopify}"), shopify);
 
     // structured (json / logfmt) — value must vanish
     pos(

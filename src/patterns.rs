@@ -92,6 +92,14 @@ pub fn default_patterns() -> Vec<(String, Regex)> {
             r"SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}",
         ),
         ("npm-token", r"npm_[A-Za-z0-9]{36}"),
+        ("digitalocean-token", r"dop_v1_[a-f0-9]{64}"),
+        ("fly-token", r"fo1_[A-Za-z0-9_-]{40,}"),
+        ("databricks-token", r"dapi[0-9a-f]{32}"),
+        ("doppler-token", r"dp\.(?:pt|st|ct|sa|scim|audit)\.[A-Za-z0-9]{40,44}"),
+        ("shopify-token", r"shp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}"),
+        ("linear-key", r"lin_api_[A-Za-z0-9]{40}"),
+        ("newrelic-key", r"NRAK-[A-Z0-9]{27}"),
+        ("pypi-token", r"pypi-[A-Za-z0-9_-]{16,}"),
         ("jwt", r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*"),
         ("private-key", r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
         (
@@ -235,6 +243,54 @@ mod tests {
     fn masks_npm_token() {
         let key = concat!("npm_", "abcdefghij0123456789abcdefghij012345");
         assert_eq!(redact(key), "[REDACTED:npm-token]");
+    }
+
+    #[test]
+    fn masks_digitalocean_token() {
+        let key = concat!("dop_v1_", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        assert_eq!(redact(key), "[REDACTED:digitalocean-token]");
+    }
+
+    #[test]
+    fn masks_fly_token() {
+        let key = concat!("fo1_", "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
+        assert_eq!(redact(key), "[REDACTED:fly-token]");
+    }
+
+    #[test]
+    fn masks_databricks_token() {
+        let key = concat!("dapi", "0123456789abcdef0123456789abcdef");
+        assert_eq!(redact(key), "[REDACTED:databricks-token]");
+    }
+
+    #[test]
+    fn masks_doppler_token() {
+        let key = concat!("dp.", "pt.abcdefghijklmnopqrstuvwxyz0123456789ABCD");
+        assert_eq!(redact(key), "[REDACTED:doppler-token]");
+    }
+
+    #[test]
+    fn masks_shopify_token() {
+        let key = concat!("shp", "at_0123456789abcdef0123456789abcdef");
+        assert_eq!(redact(key), "[REDACTED:shopify-token]");
+    }
+
+    #[test]
+    fn masks_linear_key() {
+        let key = concat!("lin_", "api_abcdefghijklmnopqrstuvwxyz0123456789ABCD");
+        assert_eq!(redact(key), "[REDACTED:linear-key]");
+    }
+
+    #[test]
+    fn masks_newrelic_key() {
+        let key = concat!("NRAK", "-ABCDEFGHIJKLMNOPQRSTUVWXYZ0");
+        assert_eq!(redact(key), "[REDACTED:newrelic-key]");
+    }
+
+    #[test]
+    fn masks_pypi_token() {
+        let key = concat!("pypi", "-AgEIcHlwaS5vcmcabcdef01234");
+        assert_eq!(redact(key), "[REDACTED:pypi-token]");
     }
 
     #[test]

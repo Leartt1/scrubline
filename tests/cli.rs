@@ -230,6 +230,15 @@ fn completions_subcommand_emits_a_script() {
 }
 
 #[test]
+fn list_detectors_lists_every_category() {
+    let out = run_with(&["list-detectors"], "");
+    assert!(out.contains("aws-access-key"), "{out}");
+    assert!(out.contains("openai-key"), "{out}");
+    assert!(out.contains("authorization"), "{out}");
+    assert!(out.contains("high-entropy"), "{out}");
+}
+
+#[test]
 fn rules_file_adds_custom_keys() {
     let path = format!("{}/keys.toml", env!("CARGO_TARGET_TMPDIR"));
     std::fs::write(&path, "keys = [\"x-internal-token\"]\n").unwrap();

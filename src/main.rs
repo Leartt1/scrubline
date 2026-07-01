@@ -18,7 +18,7 @@ use scrubline::config::{self, RulesFile};
 use scrubline::detector::Detector;
 use scrubline::engine::Engine;
 use scrubline::entropy::EntropyDetector;
-use scrubline::keys::KeySet;
+use scrubline::keys::{self, KeySet};
 use scrubline::mask::Mask;
 use scrubline::patterns::{self, PatternDetector};
 
@@ -98,15 +98,24 @@ enum Command {
         /// Shell to generate completions for.
         shell: Shell,
     },
+    /// List every secret kind scrubline detects, then exit.
+    ListDetectors,
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    if let Some(Command::Completions { shell }) = cli.command {
-        let mut cmd = Cli::command();
-        clap_complete::generate(shell, &mut cmd, "scrubline", &mut io::stdout());
-        return ExitCode::SUCCESS;
+    match &cli.command {
+        Some(Command::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(*shell, &mut cmd, "scrubline", &mut io::stdout());
+            return ExitCode::SUCCESS;
+        }
+        Some(Command::ListDetectors) => {
+            print_detectors();
+            return ExitCode::SUCCESS;
+        }
+        None => {}
     }
 
     let engine = match setup_engine(&cli) {
@@ -146,6 +155,30 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Print every secret kind scrubline detects: named-pattern kinds, structured
+/// sensitive keys, and the entropy heuristic.
+fn print_detectors() {
+    let mut pattern_kinds: Vec<String> = patterns::default_patterns()
+        .into_iter()
+        .map(|(k, _)| k)
+        .collect();
+    pattern_kinds.sort();
+    pattern_kinds.dedup();
+
+    let mut structured_keys: Vec<&str> = keys::SENSITIVE_KEYS.to_vec();
+    structured_keys.sort_unstable();
+
+    println!("named patterns ({}):", pattern_kinds.len());
+    for k in &pattern_kinds {
+        println!("  {k}");
+    }
+    println!("\nstructured keys ({}):", structured_keys.len());
+    for k in &structured_keys {
+        println!("  {k}");
+    }
+    println!("\nheuristic:\n  high-entropy");
 }
 
 /// Read a Claude Code hook payload from stdin and write the JSON response. Exit 0

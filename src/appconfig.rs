@@ -22,6 +22,7 @@ use serde::Deserialize;
 pub struct AppConfig {
     pub no_entropy: Option<bool>,
     pub mask: Option<String>,
+    pub mask_char: Option<char>,
     pub rules: Option<PathBuf>,
     pub allow: Option<PathBuf>,
     #[serde(default)]
@@ -40,16 +41,18 @@ mod tests {
 
     #[test]
     fn parses_all_fields() {
-        let src = r#"
+        let src = r##"
             no_entropy = true
             mask = "hash"
+            mask_char = "#"
             rules = "r.toml"
             allow = "a.txt"
             keys = ["x-internal"]
-        "#;
+        "##;
         let c = parse_config(src).unwrap();
         assert_eq!(c.no_entropy, Some(true));
         assert_eq!(c.mask.as_deref(), Some("hash"));
+        assert_eq!(c.mask_char, Some('#'));
         assert_eq!(c.rules, Some(PathBuf::from("r.toml")));
         assert_eq!(c.allow, Some(PathBuf::from("a.txt")));
         assert_eq!(c.keys, vec!["x-internal"]);

@@ -233,6 +233,9 @@ fn resolve_mask(cli: &Cli, app: &AppConfig) -> Result<Mask, String> {
     if let Some(c) = cli.mask_char {
         return Ok(Mask::Fixed(c.to_string().repeat(MASK_WIDTH)));
     }
+    if let Some(c) = app.mask_char {
+        return Ok(Mask::Fixed(c.to_string().repeat(MASK_WIDTH)));
+    }
     match app.mask.as_deref() {
         None | Some("labeled") => Ok(Mask::Labeled),
         Some("hash") => Ok(Mask::Hashed),
